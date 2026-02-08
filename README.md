@@ -41,13 +41,7 @@ Integracja dla Home Assistant umożliwiająca śledzenie aktualnych cen energii 
 
 ### Metoda 2: Ręczna instalacja
 1. Utwórz folder `custom_components/pstryk` w katalogu konfiguracyjnym HA
-2. Skopiuj pliki:
-init.py
-manifest.json
-config_flow.py
-const.py
-sensor.py
-logo.png (opcjonalnie)
+2. Wgraj wszystkie pliki z repozytorium.
 3. Zrestartuj Home Assistant
 
 ## Konfiguracja
