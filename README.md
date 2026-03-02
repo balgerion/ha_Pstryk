@@ -12,22 +12,22 @@ https://github.com/balgerion/ha_Pstryk_card
 Integracja dla Home Assistant umożliwiająca śledzenie aktualnych cen energii elektrycznej oraz prognoz z platformy Pstryk.
 
 ## Funkcje  
-- 🔌 Aktualna cena kupna i sprzedaży energii  
-- 📅 Tabela 24h z prognozowanymi cenami dla sensora API  
-- 📆 Tabela 48h z prognozowanymi cenami dla sensora MQTT  
-- ⚙️ Konfigurowalna liczba "najlepszych godzin"  
-- 🔻 Konfigurowalna liczba "najgorszych godzin"  
-- 🕒 Cena w następnej godzinie  
-- 📉 Średnia cena z pozostałej ilości godzin do końca doby  
-- 🌅 Średnia cena wschód/zachód  
-- 🕰️ Automatyczna konwersja czasu UTC → lokalny  
-- 🔄 Dane są aktualizowane minutę po pełnej godzinie  
-- 🧩 Konfiguracja z poziomu integracji  
-- 🔑 Walidacja klucza API / Cache danych / Zabezpieczenie przed timeoutem API  
-- 📡 Integracja wystawia po lokalnym MQTT tablice cen w natywnym formacie EVCC  
-- 📊 Średnia zakupu oraz sprzedaży - miesięczna/roczna  
-- 📈 Bilans miesięczny/roczny  
-- 🛡️ Debug i logowanie  
+- Aktualna cena kupna i sprzedaży energii  
+- Tabela 24h z prognozowanymi cenami dla sensora API  
+- Tabela 48h z prognozowanymi cenami dla sensora MQTT  
+- Konfigurowalna liczba "najlepszych godzin"  
+- Konfigurowalna liczba "najgorszych godzin"  
+- Cena w następnej godzinie  
+- Średnia cena z pozostałej ilości godzin do końca doby  
+- Średnia cena wschód/zachód  
+- Automatyczna konwersja czasu UTC → lokalny  
+- Dane są aktualizowane minutę po pełnej godzinie  
+- Konfiguracja z poziomu integracji  
+- Walidacja klucza API / Cache danych / Zabezpieczenie przed timeoutem API  
+- Integracja wystawia po lokalnym MQTT tablice cen w natywnym formacie EVCC  
+- Średnia zakupu oraz sprzedaży - miesięczna/roczna  
+- Bilans miesięczny/roczny  
+- Debug i logowanie  
 
 
 ## Instalacja
