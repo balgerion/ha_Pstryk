@@ -26,8 +26,8 @@ CONF_MQTT_48H_MODE = "mqtt_48h_mode"
 # Retry mechanism constants
 CONF_RETRY_ATTEMPTS = "retry_attempts"
 CONF_RETRY_DELAY = "retry_delay"
-DEFAULT_RETRY_ATTEMPTS = 3
-DEFAULT_RETRY_DELAY = 20  # seconds
+DEFAULT_RETRY_ATTEMPTS = 5
+DEFAULT_RETRY_DELAY = 30  # seconds
 MIN_RETRY_ATTEMPTS = 1
 MAX_RETRY_ATTEMPTS = 10
 MIN_RETRY_DELAY = 5  # seconds
