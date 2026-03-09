@@ -88,7 +88,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.debug(f"Fetching daily data from {yesterday_start} to {day_after_tomorrow}")
 
             try:
-                daily_data = await self.api_client.fetch(daily_url)
                 daily_data = await self.api_client.fetch(
                     daily_url,
                     max_retries=self.retry_attempts,
