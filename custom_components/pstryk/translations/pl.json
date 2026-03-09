@@ -182,10 +182,14 @@
     "api_error_5xx_user": "Błąd serwera API ({status}) - problem z serwerem",
     "api_error_generic": "Błąd API {status} dla {price_type}: {error}",
     "api_error_generic_user": "Błąd API {status}: {error}",
+    "api_error_html": "Błąd API {status} dla {endpoint} (otrzymano stronę błędu HTML)",
     "network_error": "Błąd sieci podczas pobierania danych {price_type}: {error}",
     "network_error_user": "Błąd sieci: {error}",
     "unexpected_error": "Nieoczekiwany błąd podczas pobierania danych {price_type}: {error}",
     "unexpected_error_user": "Błąd: {error}",
-    "using_cache": "Używanie danych z pamięci podręcznej z powodu błędu API"
+    "using_cache": "Używanie danych z pamięci podręcznej z powodu błędu API",
+    "rate_limited": "Endpoint '{endpoint}' jest ograniczony. Ponowna próba za {seconds} sekund",
+    "using_cache_rate_limit": "Używanie danych z cache - endpoint ograniczony na {seconds} sekund",
+    "waiting_rate_limit": "Oczekiwanie {seconds} sekund na zniesienie ograniczenia"
   }
 }
