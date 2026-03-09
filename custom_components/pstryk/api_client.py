@@ -101,15 +101,9 @@ class PstrykAPIClient:
 
     def _get_endpoint_key(self, url: str) -> str:
         """Extract endpoint key from URL for rate limiting."""
-        # Extract the main endpoint (e.g., "pricing", "prosumer-pricing", "energy-cost")
-        if "pricing/?resolution" in url:
-            return "pricing"
-        elif "prosumer-pricing/?resolution" in url:
-            return "prosumer-pricing"
-        elif "meter-data/energy-cost" in url:
-            return "energy-cost"
-        elif "meter-data/energy-usage" in url:
-            return "energy-usage"
+        # The integration now uses unified-metrics for both pricing and meter data.
+        if "meter-data/unified-metrics" in url:
+            return "unified-metrics"
         return "unknown"
 
     async def _check_rate_limit(self, endpoint_key: str) -> Optional[float]:

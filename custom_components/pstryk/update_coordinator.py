@@ -8,8 +8,7 @@ from homeassistant.util import dt as dt_util
 from homeassistant.helpers.translation import async_get_translations
 from .const import (
     API_URL,
-    BUY_ENDPOINT,
-    SELL_ENDPOINT,
+    PRICING_ENDPOINT,
     DOMAIN,
     DEFAULT_RETRY_ATTEMPTS,
     DEFAULT_RETRY_DELAY
@@ -60,6 +59,16 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER,
             name=f"{DOMAIN}_{price_type}",
             update_interval=update_interval,
+        )
+
+    def _extract_price_value(self, frame):
+        """Return normalized gross price for buy or prosumer sell frames."""
+        metrics = frame.get("metrics", {})
+        pricing = metrics.get("pricing", {})
+        price_key = "price_gross" if self.price_type == "buy" else "price_prosumer_gross"
+
+        return convert_price(
+            frame.get(price_key, pricing.get(price_key, frame.get("price_gross")))
         )
 
     def _is_likely_placeholder_data(self, prices_for_day):
@@ -159,8 +168,7 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         start_str = start_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
         end_str = end_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        endpoint_tpl = BUY_ENDPOINT if self.price_type == "buy" else SELL_ENDPOINT
-        endpoint = endpoint_tpl.format(start=start_str, end=end_str)
+        endpoint = PRICING_ENDPOINT.format(start=start_str, end=end_str)
         url = f"{API_URL}{endpoint}"
 
         _LOGGER.debug("Requesting %s data from %s", self.price_type, url)
@@ -191,7 +199,7 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
             current_price = None
 
             for f in frames:
-                val = convert_price(f.get("price_gross"))
+                val = self._extract_price_value(f)
                 if val is None:
                     continue
 

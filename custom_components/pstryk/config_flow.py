@@ -12,6 +12,7 @@ from .const import (
     DOMAIN,
     API_URL,
     API_TIMEOUT,
+    PRICING_ENDPOINT,
     DEFAULT_MQTT_TOPIC_BUY,
     DEFAULT_MQTT_TOPIC_SELL,
     CONF_MQTT_ENABLED,
@@ -161,7 +162,7 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         start_utc = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         end_utc = (now + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        endpoint = f"pricing/?resolution=hour&window_start={start_utc}&window_end={end_utc}"
+        endpoint = PRICING_ENDPOINT.format(start=start_utc, end=end_utc)
         url = f"{API_URL}{endpoint}"
 
         try:

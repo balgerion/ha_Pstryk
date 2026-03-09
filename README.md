@@ -7,9 +7,26 @@ Użyj mojego kodu E3WOTQ w koszyku w aplikacji. Bonus trafi do Twojego Portfela 
 !!! Dedykowana Karta do integracji:
 https://github.com/balgerion/ha_Pstryk_card
 
-[![Wersja](https://img.shields.io/badge/wersja-1.7.2-blue)](https://github.com/balgerion/ha_Pstryk/)
+[![Wersja](https://img.shields.io/badge/wersja-1.8.1-blue)](https://github.com/balgerion/ha_Pstryk/)
 
 Integracja dla Home Assistant umożliwiająca śledzenie aktualnych cen energii elektrycznej oraz prognoz z platformy Pstryk.
+
+## Status API
+
+Integracja korzysta teraz z nowego endpointu `unified-metrics` dla:
+- cen zakupu i sprzedaży
+- zużycia energii
+- kosztów i bilansu
+
+To jest ważne, ponieważ według aktualnej dokumentacji Pstryk stare endpointy mają zostać wyłączone `2026-04-01`.
+
+## Changelog
+
+### 1.8.1
+- migracja cen zakupu i sprzedaży na `meter-data/unified-metrics?metrics=pricing`
+- migracja kosztów i zużycia na `meter-data/unified-metrics?metrics=meter_values,cost`
+- usunięcie zależności od starych endpointów `pricing`, `prosumer-pricing`, `energy-cost` i `energy-usage`
+- dodanie kolekcji Postmana do ręcznej weryfikacji odpowiedzi API
 
 ## Funkcje  
 - Aktualna cena kupna i sprzedaży energii  
@@ -43,6 +60,19 @@ Integracja dla Home Assistant umożliwiająca śledzenie aktualnych cen energii 
 1. Utwórz folder `custom_components/pstryk` w katalogu konfiguracyjnym HA
 2. Wgraj wszystkie pliki z repozytorium.
 3. Zrestartuj Home Assistant
+
+## Testowanie API
+
+W repo jest gotowa kolekcja Postmana:
+- `Pstryk Integrations API.postman_collection.json`
+
+Jak użyć:
+1. Zaimportuj kolekcję do Postmana
+2. Otwórz zakładkę `Variables`
+3. Ustaw `api_token` na swój klucz API Pstryk
+4. Uruchamiaj requesty z folderu `Unified Metrics`
+
+Folder `Legacy Comparison` zostawiłem do ręcznego porównywania odpowiedzi ze starych endpointów podczas migracji.
 
 ## Konfiguracja
 1. Przejdź do `Ustawienia` → `Urządzenia i usługi`

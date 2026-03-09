@@ -4,12 +4,18 @@ DOMAIN = "pstryk"
 API_URL = "https://api.pstryk.pl/integrations/"
 API_TIMEOUT = 60
 
-BUY_ENDPOINT = "pricing/?resolution=hour&window_start={start}&window_end={end}"
-SELL_ENDPOINT = "prosumer-pricing/?resolution=hour&window_start={start}&window_end={end}"
+# Unified pricing endpoint for both buy and prosumer sell prices.
+PRICING_ENDPOINT = (
+    "meter-data/unified-metrics/?metrics=pricing"
+    "&resolution=hour&window_start={start}&window_end={end}"
+)
 
-# Energy cost and usage endpoints
-ENERGY_COST_ENDPOINT = "meter-data/energy-cost/?resolution={resolution}&window_start={start}&window_end={end}&for_tz=Europe/Warsaw"
-ENERGY_USAGE_ENDPOINT = "meter-data/energy-usage/?resolution={resolution}&window_start={start}&window_end={end}&for_tz=Europe/Warsaw"
+# Unified meter metrics endpoint replacing deprecated meter-data energy-cost and
+# energy-usage endpoints.
+UNIFIED_METRICS_ENDPOINT = (
+    "meter-data/unified-metrics/?metrics=meter_values,cost"
+    "&resolution={resolution}&window_start={start}&window_end={end}&for_tz=Europe/Warsaw"
+)
 
 ATTR_BUY_PRICE = "buy_price"
 ATTR_SELL_PRICE = "sell_price"

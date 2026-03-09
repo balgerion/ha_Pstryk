@@ -1,0 +1,445 @@
+{
+  "info": {
+    "_postman_id": "9b40f8fd-2fc7-4f1c-92ea-c8d65f1b8f2d",
+    "name": "Pstryk Integrations API",
+    "description": "Postman collection for the Pstryk integrations API based on the current OpenAPI schema from https://api.pstryk.pl/integrations/schema/.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://api.pstryk.pl"
+    },
+    {
+      "key": "api_token",
+      "value": "sk-your-token-here"
+    },
+    {
+      "key": "for_tz",
+      "value": "Europe/Warsaw"
+    },
+    {
+      "key": "window_start",
+      "value": "2026-03-09T00:00:00Z"
+    },
+    {
+      "key": "window_end",
+      "value": "2026-03-10T00:00:00Z"
+    },
+    {
+      "key": "pricing_resolution",
+      "value": "hour"
+    },
+    {
+      "key": "metrics",
+      "value": "meter_values,cost"
+    }
+  ],
+  "item": [
+    {
+      "name": "Unified Metrics",
+      "description": "New unified endpoint that replaces deprecated meter-data endpoints.",
+      "item": [
+        {
+          "name": "Unified Metrics - Meter Values + Cost",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{api_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/integrations/meter-data/unified-metrics/?metrics={{metrics}}&resolution=day&window_start={{window_start}}&window_end={{window_end}}&for_tz={{for_tz}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "integrations",
+                "meter-data",
+                "unified-metrics",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "metrics",
+                  "value": "{{metrics}}"
+                },
+                {
+                  "key": "resolution",
+                  "value": "day"
+                },
+                {
+                  "key": "window_start",
+                  "value": "{{window_start}}"
+                },
+                {
+                  "key": "window_end",
+                  "value": "{{window_end}}"
+                },
+                {
+                  "key": "for_tz",
+                  "value": "{{for_tz}}"
+                }
+              ]
+            },
+            "description": "Default request matching the integration migration path."
+          },
+          "response": []
+        },
+        {
+          "name": "Unified Metrics - Pricing",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{api_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/integrations/meter-data/unified-metrics/?metrics=pricing&resolution={{pricing_resolution}}&window_start={{window_start}}&window_end={{window_end}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "integrations",
+                "meter-data",
+                "unified-metrics",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "metrics",
+                  "value": "pricing"
+                },
+                {
+                  "key": "resolution",
+                  "value": "{{pricing_resolution}}"
+                },
+                {
+                  "key": "window_start",
+                  "value": "{{window_start}}"
+                },
+                {
+                  "key": "window_end",
+                  "value": "{{window_end}}"
+                }
+              ]
+            },
+            "description": "Use this to test whether unified pricing can replace legacy pricing endpoints for buy prices."
+          },
+          "response": []
+        },
+        {
+          "name": "Unified Metrics - All Available Metrics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{api_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/integrations/meter-data/unified-metrics/?metrics=meter_values,cost,carbon,pricing&resolution=day&window_start={{window_start}}&window_end={{window_end}}&for_tz={{for_tz}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "integrations",
+                "meter-data",
+                "unified-metrics",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "metrics",
+                  "value": "meter_values,cost,carbon,pricing"
+                },
+                {
+                  "key": "resolution",
+                  "value": "day"
+                },
+                {
+                  "key": "window_start",
+                  "value": "{{window_start}}"
+                },
+                {
+                  "key": "window_end",
+                  "value": "{{window_end}}"
+                },
+                {
+                  "key": "for_tz",
+                  "value": "{{for_tz}}"
+                }
+              ]
+            },
+            "description": "Single request to inspect the full nested response shape."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Legacy Comparison",
+      "description": "Deprecated endpoints kept here for side-by-side comparison during migration.",
+      "item": [
+        {
+          "name": "Pricing",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{api_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/integrations/pricing/?resolution={{pricing_resolution}}&window_start={{window_start}}&window_end={{window_end}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "integrations",
+                "pricing",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "resolution",
+                  "value": "{{pricing_resolution}}"
+                },
+                {
+                  "key": "window_start",
+                  "value": "{{window_start}}"
+                },
+                {
+                  "key": "window_end",
+                  "value": "{{window_end}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Prosumer Pricing",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{api_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/integrations/prosumer-pricing/?resolution={{pricing_resolution}}&window_start={{window_start}}&window_end={{window_end}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "integrations",
+                "prosumer-pricing",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "resolution",
+                  "value": "{{pricing_resolution}}"
+                },
+                {
+                  "key": "window_start",
+                  "value": "{{window_start}}"
+                },
+                {
+                  "key": "window_end",
+                  "value": "{{window_end}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Energy Cost",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{api_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/integrations/meter-data/energy-cost/?resolution=day&window_start={{window_start}}&window_end={{window_end}}&for_tz={{for_tz}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "integrations",
+                "meter-data",
+                "energy-cost",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "resolution",
+                  "value": "day"
+                },
+                {
+                  "key": "window_start",
+                  "value": "{{window_start}}"
+                },
+                {
+                  "key": "window_end",
+                  "value": "{{window_end}}"
+                },
+                {
+                  "key": "for_tz",
+                  "value": "{{for_tz}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Energy Usage",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{api_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/integrations/meter-data/energy-usage/?resolution=day&window_start={{window_start}}&window_end={{window_end}}&for_tz={{for_tz}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "integrations",
+                "meter-data",
+                "energy-usage",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "resolution",
+                  "value": "day"
+                },
+                {
+                  "key": "window_start",
+                  "value": "{{window_start}}"
+                },
+                {
+                  "key": "window_end",
+                  "value": "{{window_end}}"
+                },
+                {
+                  "key": "for_tz",
+                  "value": "{{for_tz}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Carbon Footprint",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{api_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/integrations/meter-data/carbon-footprint/?resolution=day&window_start={{window_start}}&window_end={{window_end}}&for_tz={{for_tz}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "integrations",
+                "meter-data",
+                "carbon-footprint",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "resolution",
+                  "value": "day"
+                },
+                {
+                  "key": "window_start",
+                  "value": "{{window_start}}"
+                },
+                {
+                  "key": "window_end",
+                  "value": "{{window_end}}"
+                },
+                {
+                  "key": "for_tz",
+                  "value": "{{for_tz}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
