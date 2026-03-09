@@ -7,7 +7,7 @@ Użyj mojego kodu E3WOTQ w koszyku w aplikacji. Bonus trafi do Twojego Portfela 
 !!! Dedykowana Karta do integracji:
 https://github.com/balgerion/ha_Pstryk_card
 
-[![Wersja](https://img.shields.io/badge/wersja-1.8.1-blue)](https://github.com/balgerion/ha_Pstryk/)
+[![Wersja](https://img.shields.io/badge/wersja-2.0.0-blue)](https://github.com/balgerion/ha_Pstryk/)
 
 Integracja dla Home Assistant umożliwiająca śledzenie aktualnych cen energii elektrycznej oraz prognoz z platformy Pstryk.
 
@@ -22,7 +22,7 @@ To jest ważne, ponieważ według aktualnej dokumentacji Pstryk stare endpointy 
 
 ## Changelog
 
-### 1.8.1
+### 2.0.0
 - migracja cen zakupu i sprzedaży na `meter-data/unified-metrics?metrics=pricing`
 - migracja kosztów i zużycia na `meter-data/unified-metrics?metrics=meter_values,cost`
 - usunięcie zależności od starych endpointów `pricing`, `prosumer-pricing`, `energy-cost` i `energy-usage`
