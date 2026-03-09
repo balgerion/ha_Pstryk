@@ -149,20 +149,20 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
             "energy_balance": frame.get("energy_balance", meter_values.get("energy_balance", 0) or 0),
             "fae_cost": frame.get(
                 "fae_cost",
-                cost.get("energy_active_import_register_cost", cost.get("total_cost", 0) or 0),
+                cost.get("energy_import_cost", cost.get("energy_active_import_register_cost", 0) or 0),
             ),
             "var_dist_cost_net": frame.get("var_dist_cost_net", cost.get("distribution_cost", 0) or 0),
             "fix_dist_cost_net": frame.get("fix_dist_cost_net", 0),
             "energy_cost_net": frame.get(
                 "energy_cost_net",
-                cost.get("energy_active_import_register_cost", 0) or 0,
+                cost.get("energy_cost_net", cost.get("energy_import_cost", 0) or 0),
             ),
             "service_cost_net": frame.get("service_cost_net", 0),
             "excise": frame.get("excise", cost.get("excise", 0) or 0),
             "vat": frame.get("vat", cost.get("vat", 0) or 0),
             "energy_sold_value": frame.get(
                 "energy_sold_value",
-                cost.get("energy_active_export_register_value", 0) or 0,
+                cost.get("energy_sold_value", cost.get("energy_active_export_register_value", 0) or 0),
             ),
             "energy_balance_value": frame.get(
                 "energy_balance_value",
