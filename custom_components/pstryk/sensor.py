@@ -130,7 +130,12 @@ async def async_setup_entry(
         coordinators.append((coordinator, price_type, key))
 
     # Create cost coordinator (will be initialized as unavailable for lazy loading)
-    cost_coordinator = PstrykCostDataUpdateCoordinator(hass, api_client)
+    cost_coordinator = PstrykCostDataUpdateCoordinator(
+        hass,
+        api_client,
+        retry_attempts,
+        retry_delay
+    )
     cost_coordinator.last_update_success = False
     coordinators.append((cost_coordinator, "cost", cost_key))
 
@@ -323,14 +328,12 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
     def native_value(self):
         if self.coordinator.data is None:
             return None
-        
-        # Próbujemy znaleźć aktualną cenę na podstawie czasu
+
+        # Get current price based on actual time - NO FALLBACK to old data!
         current_price = self._get_current_price()
-        
-        # Jeśli nie znaleźliśmy, używamy wartości z koordynatora
-        if current_price is None:
-            current_price = self.coordinator.data.get("current")
-            
+
+        # If we can't find current price, sensor should be unavailable (return None)
+        # This prevents automations from running with wrong/old prices
         return current_price
 
     @property
@@ -1090,10 +1093,6 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
             "entity.sensor.balance",
             "Balance"
         )
-        energy_cost_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.buy_cost",
-            "Buy cost"
-        )
         distribution_cost_key = _TRANSLATIONS_CACHE.get(
             "entity.sensor.distribution_cost",
             "Distribution cost"
@@ -1135,9 +1134,8 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
             
             start_local = dt_util.as_local(dt_util.parse_datetime(start_utc)) if start_utc else None
             end_local = dt_util.as_local(dt_util.parse_datetime(end_utc)) if end_utc else None
-            
+
             attrs.update({
-                energy_cost_key: frame.get("fae_cost", 0),
                 distribution_cost_key: frame.get("var_dist_cost_net", 0) + frame.get("fix_dist_cost_net", 0),
                 excise_key: frame.get("excise", 0),
                 vat_key: frame.get("vat", 0),
