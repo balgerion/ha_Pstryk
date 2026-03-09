@@ -206,10 +206,14 @@
     "api_error_5xx_user": "API server error ({status}) - server issue",
     "api_error_generic": "API error {status} for {price_type}: {error}",
     "api_error_generic_user": "API error {status}: {error}",
+    "api_error_html": "API error {status} for {endpoint} (HTML error page received)",
     "network_error": "Network error fetching {price_type} data: {error}",
     "network_error_user": "Network error: {error}",
     "unexpected_error": "Unexpected error fetching {price_type} data: {error}",
     "unexpected_error_user": "Error: {error}",
-    "using_cache": "Using cached data from previous update due to API failure"
+    "using_cache": "Using cached data from previous update due to API failure",
+    "rate_limited": "Endpoint '{endpoint}' is rate limited. Will retry after {seconds} seconds",
+    "using_cache_rate_limit": "Using cached data - endpoint rate limited for {seconds} seconds",
+    "waiting_rate_limit": "Waiting {seconds} seconds for rate limit to clear"
   }
 }

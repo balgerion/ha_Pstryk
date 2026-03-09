@@ -95,7 +95,6 @@ async def async_get_config_entry_diagnostics(
             if coordinator.data:
                 coordinator_data["prices_count"] = len(coordinator.data.get("prices", []))
                 coordinator_data["prices_today_count"] = len(coordinator.data.get("prices_today", []))
-                coordinator_data["current_price"] = coordinator.data.get("current")
                 coordinator_data["is_cached"] = coordinator.data.get("is_cached", False)
                 
                 # Check tomorrow prices availability
