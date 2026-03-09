@@ -9,7 +9,9 @@ from .const import (
     DOMAIN,
     API_URL,
     ENERGY_COST_ENDPOINT,
-    ENERGY_USAGE_ENDPOINT
+    ENERGY_USAGE_ENDPOINT,
+    DEFAULT_RETRY_ATTEMPTS,
+    DEFAULT_RETRY_DELAY
 )
 from .api_client import PstrykAPIClient
 
@@ -19,17 +21,27 @@ _LOGGER = logging.getLogger(__name__)
 class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching Pstryk energy cost data."""
 
-    def __init__(self, hass: HomeAssistant, api_client: PstrykAPIClient):
+    def __init__(self, hass: HomeAssistant, api_client: PstrykAPIClient, retry_attempts=None, retry_delay=None):
         """Initialize."""
         self.api_client = api_client
         self._unsub_hourly = None
         self._unsub_midnight = None
 
+        # Get retry configuration
+        if retry_attempts is None:
+            retry_attempts = DEFAULT_RETRY_ATTEMPTS
+        if retry_delay is None:
+            retry_delay = DEFAULT_RETRY_DELAY
+
+        self.retry_attempts = retry_attempts
+        self.retry_delay = retry_delay
+
+        # We use custom scheduled updates (midnight, hourly)
+        # No automatic update_interval needed
         super().__init__(
             hass,
             _LOGGER,
             name=f"{DOMAIN}_cost",
-            update_interval=timedelta(hours=1),
         )
 
     async def _async_update_data(self, fetch_all: bool = True):
@@ -82,8 +94,16 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.debug(f"Fetching daily data from {yesterday_start} to {day_after_tomorrow}")
 
             try:
-                daily_cost_data = await self.api_client.fetch(daily_cost_url)
-                daily_usage_data = await self.api_client.fetch(daily_usage_url)
+                daily_cost_data = await self.api_client.fetch(
+                    daily_cost_url,
+                    max_retries=self.retry_attempts,
+                    base_delay=self.retry_delay
+                )
+                daily_usage_data = await self.api_client.fetch(
+                    daily_usage_url,
+                    max_retries=self.retry_attempts,
+                    base_delay=self.retry_delay
+                )
 
                 if daily_cost_data and daily_usage_data:
                     data["daily"] = self._process_daily_data_simple(daily_cost_data, daily_usage_data)
@@ -109,8 +129,16 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
                 _LOGGER.debug(f"Fetching monthly data for {month_start.strftime('%B %Y')}")
 
                 try:
-                    monthly_cost_data = await self.api_client.fetch(monthly_cost_url)
-                    monthly_usage_data = await self.api_client.fetch(monthly_usage_url)
+                    monthly_cost_data = await self.api_client.fetch(
+                        monthly_cost_url,
+                        max_retries=self.retry_attempts,
+                        base_delay=self.retry_delay
+                    )
+                    monthly_usage_data = await self.api_client.fetch(
+                        monthly_usage_url,
+                        max_retries=self.retry_attempts,
+                        base_delay=self.retry_delay
+                    )
 
                     if monthly_cost_data and monthly_usage_data:
                         data["monthly"] = self._process_monthly_data_simple(monthly_cost_data, monthly_usage_data)
@@ -132,8 +160,16 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
                 _LOGGER.debug(f"Fetching yearly data for {year_start.year}")
 
                 try:
-                    yearly_cost_data = await self.api_client.fetch(yearly_cost_url)
-                    yearly_usage_data = await self.api_client.fetch(yearly_usage_url)
+                    yearly_cost_data = await self.api_client.fetch(
+                        yearly_cost_url,
+                        max_retries=self.retry_attempts,
+                        base_delay=self.retry_delay
+                    )
+                    yearly_usage_data = await self.api_client.fetch(
+                        yearly_usage_url,
+                        max_retries=self.retry_attempts,
+                        base_delay=self.retry_delay
+                    )
 
                     if yearly_cost_data and yearly_usage_data:
                         data["yearly"] = self._process_yearly_data_simple(yearly_cost_data, yearly_usage_data)
@@ -306,9 +342,18 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
     async def _handle_midnight_update(self, _):
         """Handle midnight update - fetch all data (daily, monthly, yearly)."""
         _LOGGER.debug("Running scheduled midnight cost update (all resolutions)")
-        # Fetch all resolutions at midnight
-        await self._async_update_data(fetch_all=True)
-        self.schedule_midnight_update()
+        try:
+            # Fetch all resolutions at midnight
+            data = await self._async_update_data(fetch_all=True)
+            self.data = data
+            self.last_update_success = True
+            self.async_update_listeners()
+        except Exception as err:
+            _LOGGER.error("Midnight cost update failed: %s - will retry next hour", err)
+            self.last_update_success = False
+        finally:
+            # Always reschedule, even if update failed
+            self.schedule_midnight_update()
 
     def schedule_hourly_update(self):
         """Schedule hourly updates."""
@@ -327,8 +372,17 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     async def _handle_hourly_update(self, now):
-        """Handle the hourly update - fetch only daily data."""
-        _LOGGER.debug("Triggering hourly cost update (daily data only)")
-        # Fetch only daily data during hourly updates
-        await self._async_update_data(fetch_all=False)
-        self.schedule_hourly_update()
+        """Handle the hourly update - fetch all resolutions (daily, monthly, yearly)."""
+        _LOGGER.debug("Triggering hourly cost update (all resolutions)")
+        try:
+            # Fetch all resolutions during hourly updates
+            data = await self._async_update_data(fetch_all=True)
+            self.data = data
+            self.last_update_success = True
+            self.async_update_listeners()
+        except Exception as err:
+            _LOGGER.error("Hourly cost update failed: %s - will retry next hour", err)
+            self.last_update_success = False
+        finally:
+            # Always reschedule, even if update failed
+            self.schedule_hourly_update()
