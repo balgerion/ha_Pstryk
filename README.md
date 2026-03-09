@@ -13,20 +13,10 @@ Integracja dla Home Assistant umożliwiająca śledzenie aktualnych cen energii 
 
 ## Status API
 
-Integracja korzysta teraz z nowego endpointu `unified-metrics` dla:
+Integracja korzysta  z nowego endpointu `unified-metrics` dla:
 - cen zakupu i sprzedaży
 - zużycia energii
 - kosztów i bilansu
-
-To jest ważne, ponieważ według aktualnej dokumentacji Pstryk stare endpointy mają zostać wyłączone `2026-04-01`.
-
-## Changelog
-
-### 2.0.0
-- migracja cen zakupu i sprzedaży na `meter-data/unified-metrics?metrics=pricing`
-- migracja kosztów i zużycia na `meter-data/unified-metrics?metrics=meter_values,cost`
-- usunięcie zależności od starych endpointów `pricing`, `prosumer-pricing`, `energy-cost` i `energy-usage`
-- dodanie kolekcji Postmana do ręcznej weryfikacji odpowiedzi API
 
 ## Funkcje  
 - Aktualna cena kupna i sprzedaży energii  
