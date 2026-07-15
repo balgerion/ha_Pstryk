@@ -43,7 +43,6 @@ class PstrykMqttPublisher:
         if self._initialized:
             return True
             
-        # Load translations
         try:
             self._translations = await async_get_translations(
                 self.hass, self.hass.config.language, DOMAIN, ["mqtt"]
@@ -67,16 +66,13 @@ class PstrykMqttPublisher:
         if not price_values:
             return False
             
-        # Need at least 20 hours for a valid day
         if len(price_values) < 20:
             return False
             
-        # If all values are identical, it's likely placeholder data
         unique_values = set(price_values)
         if len(unique_values) == 1:
             return False
             
-        # If more than 90% of values are the same, probably placeholders
         most_common = max(set(price_values), key=price_values.count)
         if price_values.count(most_common) / len(price_values) > 0.9:
             return False
@@ -100,30 +96,24 @@ class PstrykMqttPublisher:
             
         formatted_prices = []
         
-        # First, check if we're in 48h mode
         mqtt_48h_mode = self.hass.data[DOMAIN].get(f"{self.entry_id}_mqtt_48h_mode", False)
         
-        # Get current date for comparison - in local time
         now_local = dt_util.as_local(dt_util.utcnow())
         today_date = now_local.date()
         tomorrow_date = (now_local + timedelta(days=1)).date()
         
-        # Get all prices from coordinator
         all_prices = prices_data.get("prices", [])
         
-        # Process prices and group by date
         prices_by_date = {}
         for price_entry in all_prices:
             try:
                 if "start" not in price_entry or "price" not in price_entry:
                     continue
                     
-                # Parse the datetime (it's already in local time from coordinator)
                 price_datetime = dt_util.parse_datetime(price_entry["start"])
                 if not price_datetime:
                     continue
                     
-                # Ensure it's local time
                 price_datetime_local = dt_util.as_local(price_datetime)
                 price_date = price_datetime_local.date()
                 
@@ -135,16 +125,13 @@ class PstrykMqttPublisher:
             except Exception as e:
                 _LOGGER.error("Error processing price entry: %s", str(e))
         
-        # Determine which days to include
         days_to_include = []
         
         if mqtt_48h_mode:
-            # In 48h mode, include today and tomorrow
             if today_date in prices_by_date:
                 days_to_include.append(today_date)
             
             if tomorrow_date in prices_by_date:
-                # Check if tomorrow's data is valid
                 tomorrow_prices = prices_by_date[tomorrow_date]
                 if self._is_day_data_valid(tomorrow_prices):
                     days_to_include.append(tomorrow_date)
@@ -152,39 +139,31 @@ class PstrykMqttPublisher:
                 else:
                     _LOGGER.info(f"Excluding tomorrow prices from MQTT - appear to be placeholders or incomplete")
         else:
-            # In 24h mode, only include today
             if today_date in prices_by_date:
                 days_to_include.append(today_date)
         
-        # Process selected days
         for date_to_include in sorted(days_to_include):
             day_prices = prices_by_date.get(date_to_include, [])
             
-            # Sort by time to ensure correct order
             day_prices.sort(key=lambda x: x["start"])
             
             for price_entry in day_prices:
                 try:
-                    # Validate price is a number
                     try:
                         price_value = float(price_entry["price"])
                     except (TypeError, ValueError):
                         _LOGGER.warning("Invalid price value: %s", price_entry.get("price"))
                         continue
                         
-                    # Parse local time and convert to UTC ISO format
                     local_dt = dt_util.parse_datetime(price_entry["start"])
                     if not local_dt:
                         continue
                         
-                    # Ensure it's local time and convert to UTC
                     local_dt = dt_util.as_local(local_dt)
                     utc_dt = dt_util.as_utc(local_dt)
                     
-                    # Calculate end time (1 hour later)
                     end_dt = utc_dt + timedelta(hours=1)
                     
-                    # Format times in ISO format with Z suffix for UTC
                     start_str = utc_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
                     end_str = end_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
                     
@@ -196,16 +175,14 @@ class PstrykMqttPublisher:
                 except Exception as e:
                     _LOGGER.error("Error formatting price for EVCC: %s", str(e))
         
-        # Log summary
         if formatted_prices:
             first_time = formatted_prices[0]["start"]
             last_time = formatted_prices[-1]["start"]
             _LOGGER.debug(f"Formatted {len(formatted_prices)} prices for MQTT from {first_time} to {last_time}")
             
-            # Verify we have complete days
             hours_by_date = {}
             for fp in formatted_prices:
-                date_part = fp["start"][:10]  # YYYY-MM-DD
+                date_part = fp["start"][:10]
                 if date_part not in hours_by_date:
                     hours_by_date[date_part] = 0
                 hours_by_date[date_part] += 1
@@ -238,7 +215,6 @@ class PstrykMqttPublisher:
         """Schedule periodic updates to MQTT (default: 60 minutes)."""
         from .mqtt_common import setup_periodic_mqtt_publish
         
-        # Use common function for periodic publishing
         await setup_periodic_mqtt_publish(
             self.hass,
             self.entry_id,
@@ -251,7 +227,6 @@ class PstrykMqttPublisher:
 
     def unsubscribe(self):
         """Unsubscribe from all events."""
-        # Cleanup is handled by common function in mqtt_common.py
         _LOGGER.debug("MQTT publisher cleanup requested")
             
     @property
