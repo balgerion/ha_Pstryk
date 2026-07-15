@@ -1,0 +1,9 @@
+{
+  "name": "ha_Pstryk",
+  "domains": ["sensor"],
+  "content_in_root": false,
+  "country": "PL",
+  "render_readme": true,
+  "documentation": "https://github.com/balgerion/ha_Pstryk/blob/main/README.md",
+  "issue_tracker": "https://github.com/balgerion/ha_Pstryk/issues"
+}
