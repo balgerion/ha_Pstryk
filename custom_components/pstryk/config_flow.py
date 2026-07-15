@@ -46,13 +46,11 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the initial step - API configuration."""
         errors = {}
         if user_input is not None:
-            # Validate API key
             api_key = user_input["api_key"]
             valid = await self._validate_api_key(api_key)
             
             if valid:
                 self._data["api_key"] = api_key
-                # Move to price settings step
                 return await self.async_step_price_settings()
             else:
                 errors["api_key"] = "invalid_api_key"
@@ -68,7 +66,6 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_price_settings(self, user_input=None):
         """Handle price monitoring settings."""
         if user_input is not None:
-            # Store price settings
             self._data.update({
                 "buy_top": user_input["buy_top"],
                 "sell_top": user_input["sell_top"],
@@ -76,12 +73,10 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "sell_worst": user_input["sell_worst"],
             })
             
-            # Check if MQTT is available
             mqtt_available = await self._check_mqtt_availability()
             if mqtt_available:
                 return await self.async_step_mqtt_settings()
             else:
-                # Skip MQTT and go to API retry settings
                 return await self.async_step_api_retry()
 
         return self.async_show_form(
@@ -99,7 +94,6 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         
         if user_input is not None:
-            # Check MQTT configuration if enabled
             mqtt_enabled = user_input.get(CONF_MQTT_ENABLED, False)
             if mqtt_enabled:
                 mqtt_configured = await self._check_mqtt_configuration()
@@ -107,14 +101,12 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["base"] = "mqtt_not_configured"
             
             if not errors:
-                # Store MQTT settings
                 self._options.update({
                     CONF_MQTT_ENABLED: user_input.get(CONF_MQTT_ENABLED, False),
                     CONF_MQTT_TOPIC_BUY: user_input.get(CONF_MQTT_TOPIC_BUY, DEFAULT_MQTT_TOPIC_BUY),
                     CONF_MQTT_TOPIC_SELL: user_input.get(CONF_MQTT_TOPIC_SELL, DEFAULT_MQTT_TOPIC_SELL),
                     CONF_MQTT_48H_MODE: user_input.get(CONF_MQTT_48H_MODE, False),
                 })
-                # Move to API retry settings
                 return await self.async_step_api_retry()
 
         return self.async_show_form(
@@ -131,13 +123,11 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_api_retry(self, user_input=None):
         """Handle API retry configuration."""
         if user_input is not None:
-            # Store retry settings
             self._options.update({
                 CONF_RETRY_ATTEMPTS: user_input.get(CONF_RETRY_ATTEMPTS, DEFAULT_RETRY_ATTEMPTS),
                 CONF_RETRY_DELAY: user_input.get(CONF_RETRY_DELAY, DEFAULT_RETRY_DELAY),
             })
             
-            # Create the config entry
             return self.async_create_entry(
                 title="Pstryk Energy", 
                 data=self._data,
@@ -204,7 +194,6 @@ class PstrykOptionsFlowHandler(config_entries.OptionsFlow):
         errors = {}
         
         if user_input is not None:
-            # Check MQTT configuration if enabled
             mqtt_enabled = user_input.get(CONF_MQTT_ENABLED, False)
             if mqtt_enabled:
                 mqtt_configured = await self._check_mqtt_configuration()
@@ -214,17 +203,13 @@ class PstrykOptionsFlowHandler(config_entries.OptionsFlow):
             if not errors:
                 return self.async_create_entry(title="", data=user_input)
 
-        # Check if MQTT integration is loaded
         mqtt_enabled = False
         try:
             mqtt_enabled = self.hass.services.has_service("mqtt", "publish")
         except Exception:
             mqtt_enabled = False
         
-        # Build schema with better organization
-        # We use field naming to create visual grouping
         schema = {
-            # Price Monitoring Settings - prefix with numbers for ordering
             vol.Required("buy_top", default=self.config_entry.options.get(
                 "buy_top", self.config_entry.data.get("buy_top", 5))): 
                     vol.All(vol.Coerce(int), vol.Range(min=1, max=24)),
@@ -239,7 +224,6 @@ class PstrykOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.All(vol.Coerce(int), vol.Range(min=1, max=24)),
         }
         
-        # MQTT Configuration (if available)
         if mqtt_enabled:
             schema.update({
                 vol.Required(CONF_MQTT_ENABLED, default=self.config_entry.options.get(
@@ -252,7 +236,6 @@ class PstrykOptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_MQTT_48H_MODE, False)): bool,
             })
         
-        # API Configuration
         schema.update({
             vol.Optional(CONF_RETRY_ATTEMPTS, default=self.config_entry.options.get(
                 CONF_RETRY_ATTEMPTS, DEFAULT_RETRY_ATTEMPTS)): 
@@ -262,7 +245,6 @@ class PstrykOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.All(vol.Coerce(int), vol.Range(min=MIN_RETRY_DELAY, max=MAX_RETRY_DELAY)),
         })
 
-        # Add description with section information
         description_text = "Configure your energy price monitoring settings"
         if mqtt_enabled:
             description_text += "\n\n**Note:** Settings are grouped by: Price Monitoring, MQTT Bridge, and API Configuration"
