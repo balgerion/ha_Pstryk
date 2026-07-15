@@ -268,7 +268,7 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _handle_hourly_update(self, _):
         now = dt_util.now()
-        if now.hour == 0 and now.minute < 1:
+        if now.hour == 0 and now.minute < 2:
             today = now.strftime("%Y-%m-%d")
             has_today = self.data and any(
                 p.get("start", "").startswith(today)
