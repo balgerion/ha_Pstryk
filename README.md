@@ -13,10 +13,7 @@ Integracja dla Home Assistant umożliwiająca śledzenie aktualnych cen energii 
 
 ## Status API
 
-Integracja korzysta  z nowego endpointu `unified-metrics` dla:
-- cen zakupu i sprzedaży
-- zużycia energii
-- kosztów i bilansu
+Integracja korzysta  z nowego endpointu `unified-metrics`
 
 ## Funkcje  
 - Aktualna cena kupna i sprzedaży energii  
