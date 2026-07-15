@@ -19,12 +19,9 @@ from .const import (
     DEFAULT_RETRY_ATTEMPTS,
     DEFAULT_RETRY_DELAY
 )
-from homeassistant.helpers.translation import async_get_translations
 from homeassistant.loader import async_get_integration
 
 _LOGGER = logging.getLogger(__name__)
-
-_TRANSLATIONS_CACHE = {}
 
 _VERSION_CACHE = None
 
@@ -58,16 +55,6 @@ async def async_setup_entry(
 
     _LOGGER.debug("Setting up Pstryk sensors with buy_top=%d, sell_top=%d, buy_worst=%d, sell_worst=%d, mqtt_48h_mode=%s, retry_attempts=%d, retry_delay=%ds", 
                  buy_top, sell_top, buy_worst, sell_worst, mqtt_48h_mode, retry_attempts, retry_delay)
-
-    global _TRANSLATIONS_CACHE
-    if not _TRANSLATIONS_CACHE:
-        try:
-            _TRANSLATIONS_CACHE = await async_get_translations(
-                hass, hass.config.language, DOMAIN, ["entity", "debug"]
-            )
-        except Exception as ex:
-            _LOGGER.warning("Failed to load translations: %s", ex)
-            _TRANSLATIONS_CACHE = {}
 
     cost_key = f"{entry.entry_id}_cost"
 
@@ -281,10 +268,7 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         now = dt_util.as_local(dt_util.utcnow())
         next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
         
-        debug_msg = _TRANSLATIONS_CACHE.get(
-            "debug.looking_for_next_hour", 
-            "Looking for price for next hour: {next_hour}"
-        ).format(next_hour=next_hour.strftime("%Y-%m-%d %H:%M:%S"))
+        debug_msg = "Looking for price for next hour: {next_hour}".format(next_hour=next_hour.strftime("%Y-%m-%d %H:%M:%S"))
         _LOGGER.debug(debug_msg)
         
         is_looking_for_next_day = next_hour.day != now.day
@@ -307,10 +291,7 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
                         _LOGGER.debug("Found price for %s in today's list: %s", next_hour.strftime("%Y-%m-%d %H:%M:%S"), price_found)
                         return price_found
                 except Exception as e:
-                    error_msg = _TRANSLATIONS_CACHE.get(
-                        "debug.error_processing_date", 
-                        "Error processing date: {error}"
-                    ).format(error=str(e))
+                    error_msg = "Error processing date: {error}".format(error=str(e))
                     _LOGGER.error(error_msg)
         
         if self.coordinator.data.get("prices"):
@@ -332,23 +313,14 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
                         _LOGGER.debug("Found price for %s in full 48h list: %s", next_hour.strftime("%Y-%m-%d %H:%M:%S"), price_found)
                         return price_found
                 except Exception as e:
-                    full_list_error_msg = _TRANSLATIONS_CACHE.get(
-                        "debug.error_processing_full_list", 
-                        "Error processing date for full list: {error}"
-                    ).format(error=str(e))
+                    full_list_error_msg = "Error processing date for full list: {error}".format(error=str(e))
                     _LOGGER.error(full_list_error_msg)
         
         if is_looking_for_next_day:
-            midnight_msg = _TRANSLATIONS_CACHE.get(
-                "debug.no_price_midnight", 
-                "No price found for next day midnight. Data probably not loaded yet."
-            )
+            midnight_msg = "No price found for next day midnight. Data probably not loaded yet."
             _LOGGER.info(midnight_msg)
         else:
-            no_price_msg = _TRANSLATIONS_CACHE.get(
-                "debug.no_price_next_hour", 
-                "No price found for next hour: {next_hour}"
-            ).format(next_hour=next_hour.strftime("%Y-%m-%d %H:%M:%S"))
+            no_price_msg = "No price found for next hour: {next_hour}".format(next_hour=next_hour.strftime("%Y-%m-%d %H:%M:%S"))
             _LOGGER.warning(no_price_msg)
                 
         return None
@@ -493,80 +465,35 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
     def extra_state_attributes(self) -> dict:
         now = dt_util.as_local(dt_util.utcnow())
         
-        next_hour_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.next_hour", 
-            "Next hour"
-        )
+        next_hour_key = "Next hour"
         
-        using_cached_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.using_cached_data", 
-            "Using cached data"
-        )
+        using_cached_key = "Using cached data"
         
-        all_prices_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.all_prices", 
-            "All prices"
-        )
+        all_prices_key = "All prices"
         
-        best_prices_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.best_prices", 
-            "Best prices"
-        )
+        best_prices_key = "Best prices"
         
-        worst_prices_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.worst_prices", 
-            "Worst prices"
-        )
+        worst_prices_key = "Worst prices"
         
-        best_count_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.best_count", 
-            "Best count"
-        )
+        best_count_key = "Best count"
         
-        worst_count_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.worst_count", 
-            "Worst count"
-        )
+        worst_count_key = "Worst count"
         
-        price_count_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.price_count", 
-            "Price count"
-        )
+        price_count_key = "Price count"
         
-        last_updated_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.last_updated", 
-            "Last updated"
-        )
+        last_updated_key = "Last updated"
         
-        avg_price_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.avg_price", 
-            "Average price today"
-        )
+        avg_price_key = "Average price today"
         
-        avg_price_remaining_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.avg_price_remaining",
-            "Average price remaining"
-        )
+        avg_price_remaining_key = "Average price remaining"
         
-        avg_price_full_day_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.avg_price_full_day",
-            "Average price full day"
-        )
+        avg_price_full_day_key = "Average price full day"
         
-        tomorrow_available_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.tomorrow_available", 
-            "Tomorrow prices available"
-        )
+        tomorrow_available_key = "Tomorrow prices available"
         
-        mqtt_price_count_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.mqtt_price_count", 
-            "MQTT price count"
-        )
+        mqtt_price_count_key = "MQTT price count"
         
-        avg_price_sunrise_sunset_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.avg_price_sunrise_sunset",
-            "Average price today s/s"
-        )
+        avg_price_sunrise_sunset_key = "Average price today s/s"
         
         if self.coordinator.data is None:
             return {
@@ -775,10 +702,7 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
         
     @property
     def name(self) -> str:
-        period_name = _TRANSLATIONS_CACHE.get(
-            f"entity.sensor.period_{self.period}",
-            self.period.title()
-        )
+        period_name = self.period.title()
         return f"Pstryk {self.price_type.title()} {period_name} Average"
         
     @property
@@ -805,30 +729,12 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
         
     @property
     def extra_state_attributes(self) -> dict:
-        period_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.period",
-            "Period"
-        )
-        calculation_method_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.calculation_method",
-            "Calculation method"
-        )
-        energy_bought_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.energy_bought",
-            "Energy bought"
-        )
-        energy_sold_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.energy_sold",
-            "Energy sold"
-        )
-        total_cost_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.total_cost",
-            "Total cost"
-        )
-        total_revenue_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.total_revenue",
-            "Total revenue"
-        )
+        period_key = "Period"
+        calculation_method_key = "Calculation method"
+        energy_bought_key = "Energy bought"
+        energy_sold_key = "Energy sold"
+        total_cost_key = "Total cost"
+        total_revenue_key = "Total revenue"
         attrs = {
             period_key: self.period,
             calculation_method_key: "Weighted average",
@@ -841,10 +747,7 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
             attrs[energy_sold_key] = round(self._energy_sold, 2)
             attrs[total_revenue_key] = round(self._total_revenue, 2)
             
-        last_updated_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.last_updated", 
-            "Last updated"
-        )
+        last_updated_key = "Last updated"
         now = dt_util.now()
         attrs[last_updated_key] = now.strftime("%Y-%m-%d %H:%M:%S")
         
@@ -902,14 +805,8 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
         
     @property
     def name(self) -> str:
-        period_name = _TRANSLATIONS_CACHE.get(
-            f"entity.sensor.period_{self.period}",
-            self.period.title()
-        )
-        balance_text = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.financial_balance",
-            "Financial Balance"
-        )
+        period_name = self.period.title()
+        balance_text = "Financial Balance"
         return f"Pstryk {period_name} {balance_text}"
         
     @property
@@ -962,46 +859,16 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
         period_data = self.coordinator.data.get(self.period)
         frame = period_data.get("frame", {})
         
-        buy_cost_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.buy_cost",
-            "Buy cost"
-        )
-        sell_revenue_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.sell_revenue",
-            "Sell revenue"
-        )
-        period_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.period",
-            "Period"
-        )
-        net_balance_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.balance",
-            "Balance"
-        )
-        distribution_cost_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.distribution_cost",
-            "Distribution cost"
-        )
-        excise_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.excise",
-            "Excise"
-        )
-        vat_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.vat",
-            "VAT"
-        )
-        service_cost_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.service_cost",
-            "Service cost"
-        )
-        energy_bought_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.energy_bought",
-            "Energy bought"
-        )
-        energy_sold_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.energy_sold", 
-            "Energy sold"
-        )
+        buy_cost_key = "Buy cost"
+        sell_revenue_key = "Sell revenue"
+        period_key = "Period"
+        net_balance_key = "Balance"
+        distribution_cost_key = "Distribution cost"
+        excise_key = "Excise"
+        vat_key = "VAT"
+        service_cost_key = "Service cost"
+        energy_bought_key = "Energy bought"
+        energy_sold_key = "Energy sold"
         attrs = {
             period_key: self.period,
             net_balance_key: period_data.get("total_balance", 0),
@@ -1027,10 +894,7 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
                 "end": end_local.strftime("%Y-%m-%d") if end_local else None,
             })
             
-        last_updated_key = _TRANSLATIONS_CACHE.get(
-            "entity.sensor.last_updated", 
-            "Last updated"
-        )
+        last_updated_key = "Last updated"
         now = dt_util.now()
         attrs[last_updated_key] = now.strftime("%Y-%m-%d %H:%M:%S")
         
