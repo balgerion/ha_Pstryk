@@ -1,4 +1,3 @@
-"""Pstryk energy cost data coordinator."""
 import logging
 from datetime import timedelta
 from homeassistant.core import HomeAssistant
@@ -18,10 +17,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching Pstryk energy cost data."""
 
     def __init__(self, hass: HomeAssistant, api_client: PstrykAPIClient, retry_attempts=None, retry_delay=None):
-        """Initialize."""
         self.api_client = api_client
         self._unsub_hourly = None
         self._unsub_midnight = None
@@ -41,12 +38,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     async def _async_update_data(self, fetch_all: bool = True):
-        """Fetch energy cost data from API.
-
-        Args:
-            fetch_all: If True, fetch all resolutions (daily, monthly, yearly).
-                      If False, fetch only daily data (for hourly updates).
-        """
         _LOGGER.debug("Starting energy cost and usage data fetch (fetch_all=%s)", fetch_all)
 
         try:
@@ -143,7 +134,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(f"Error fetching energy cost data: {err}")
 
     def _normalize_frame(self, frame):
-        """Normalize unified metrics frames to the integration's internal format."""
         metrics = frame.get("metrics", {})
         meter_values = metrics.get("meter_values") or metrics.get("meterValues") or {}
         cost = metrics.get("cost") or {}
@@ -179,11 +169,9 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         }
 
     def _normalized_frames(self, response):
-        """Return frames normalized to the integration's internal shape."""
         return [self._normalize_frame(frame) for frame in response.get("frames", [])]
 
     def _process_monthly_data_simple(self, response):
-        """Take the first month frame from normalized unified metrics data."""
         _LOGGER.info("Processing monthly data - simple version")
 
         result = {
@@ -215,7 +203,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         return result
 
     def _process_daily_data_simple(self, response):
-        """Use the live day frame from normalized unified metrics data."""
         _LOGGER.info("=== SIMPLE DAILY DATA PROCESSOR ===")
 
         result = {
@@ -283,7 +270,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         return result
 
     def _process_yearly_data_simple(self, response):
-        """Sum all month frames from normalized unified metrics data."""
         _LOGGER.info("Processing yearly data - simple version")
 
         total_balance = 0
@@ -318,7 +304,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         }
 
     def schedule_midnight_update(self):
-        """Schedule midnight updates for daily reset."""
         if hasattr(self, '_unsub_midnight'):
             if self._unsub_midnight:
                 self._unsub_midnight()
@@ -337,7 +322,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     async def _handle_midnight_update(self, _):
-        """Handle midnight update - fetch all data (daily, monthly, yearly)."""
         _LOGGER.debug("Running scheduled midnight cost update (all resolutions)")
         try:
             data = await self._async_update_data(fetch_all=True)
@@ -351,7 +335,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
             self.schedule_midnight_update()
 
     def schedule_hourly_update(self):
-        """Schedule hourly updates."""
         if self._unsub_hourly:
             self._unsub_hourly()
             self._unsub_hourly = None
@@ -367,7 +350,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     async def _handle_hourly_update(self, now):
-        """Handle the hourly update - refresh daily data, reuse monthly/yearly until midnight."""
         fetch_all = not self.data or "monthly" not in self.data or "yearly" not in self.data
         _LOGGER.debug("Triggering hourly cost update (fetch_all=%s)", fetch_all)
         try:
