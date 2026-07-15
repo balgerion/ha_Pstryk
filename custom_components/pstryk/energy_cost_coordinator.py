@@ -22,6 +22,7 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         self.api_client = api_client
         self._unsub_hourly = None
         self._unsub_midnight = None
+        self._last_full_fetch_date = None
 
         if retry_attempts is None:
             retry_attempts = DEFAULT_RETRY_ATTEMPTS
@@ -124,6 +125,8 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
                 _LOGGER.debug("Skipping monthly and yearly data fetch (hourly update - using cached data)")
 
             if data:
+                if fetch_all:
+                    self._last_full_fetch_date = dt_util.now().strftime("%Y-%m-%d")
                 _LOGGER.debug(f"Successfully fetched energy cost and usage data for resolutions: {list(data.keys())}")
                 return data
             else:
@@ -350,7 +353,13 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     async def _handle_hourly_update(self, now):
-        fetch_all = not self.data or "monthly" not in self.data or "yearly" not in self.data
+        today = dt_util.now().strftime("%Y-%m-%d")
+        fetch_all = (
+            not self.data
+            or "monthly" not in self.data
+            or "yearly" not in self.data
+            or self._last_full_fetch_date != today
+        )
         _LOGGER.debug("Triggering hourly cost update (fetch_all=%s)", fetch_all)
         try:
             data = await self._async_update_data(fetch_all=fetch_all)
