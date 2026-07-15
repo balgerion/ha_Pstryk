@@ -1,4 +1,3 @@
-"""Common MQTT functionality for Pstryk Energy integration."""
 import logging
 import json
 from datetime import timedelta
@@ -11,7 +10,6 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def publish_mqtt_prices(hass, entry_id, buy_topic, sell_topic):
-    """Publish prices to MQTT - common function used by all components."""
     buy_coordinator = hass.data[DOMAIN].get(f"{entry_id}_buy")
     sell_coordinator = hass.data[DOMAIN].get(f"{entry_id}_sell")
     
@@ -71,7 +69,6 @@ async def publish_mqtt_prices(hass, entry_id, buy_topic, sell_topic):
 
 
 async def setup_periodic_mqtt_publish(hass, entry_id, buy_topic, sell_topic, interval_minutes=60):
-    """Set up periodic MQTT publishing with automatic republishing."""
     retain_key = f"{entry_id}_auto_retain"
     
     if retain_key in hass.data[DOMAIN] and callable(hass.data[DOMAIN][retain_key]):
@@ -79,7 +76,6 @@ async def setup_periodic_mqtt_publish(hass, entry_id, buy_topic, sell_topic, int
         hass.data[DOMAIN].pop(retain_key, None)
     
     async def republish_retain_periodic(now=None):
-        """Republish MQTT message with retain flag periodically."""
         try:
             success = await publish_mqtt_prices(hass, entry_id, buy_topic, sell_topic)
             if success:
