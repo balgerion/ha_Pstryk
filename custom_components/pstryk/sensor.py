@@ -21,6 +21,7 @@ from .const import (
     DEFAULT_RETRY_DELAY
 )
 from homeassistant.helpers.translation import async_get_translations
+from homeassistant.loader import async_get_integration
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,22 +31,8 @@ _VERSION_CACHE = None
 
 
 def get_integration_version(hass: HomeAssistant) -> str:
-    """Get integration version from manifest.json."""
-    global _VERSION_CACHE
-    if _VERSION_CACHE is not None:
-        return _VERSION_CACHE
-
-    try:
-        import json
-        import os
-        manifest_path = os.path.join(os.path.dirname(__file__), "manifest.json")
-        with open(manifest_path, "r") as f:
-            manifest = json.load(f)
-            _VERSION_CACHE = manifest.get("version", "unknown")
-            return _VERSION_CACHE
-    except Exception as ex:
-        _LOGGER.warning("Failed to read version from manifest.json: %s", ex)
-        return "unknown"
+    """Return integration version cached during setup."""
+    return _VERSION_CACHE or "unknown"
 
 
 async def async_setup_entry(
@@ -54,6 +41,14 @@ async def async_setup_entry(
     async_add_entities,
 ) -> None:
     """Set up the Pstryk sensors via the coordinator."""
+    global _VERSION_CACHE
+    if _VERSION_CACHE is None:
+        try:
+            integration = await async_get_integration(hass, DOMAIN)
+            _VERSION_CACHE = str(integration.version)
+        except Exception as ex:
+            _LOGGER.warning("Failed to read integration version: %s", ex)
+
     api_key = hass.data[DOMAIN][entry.entry_id]["api_key"]
     buy_top = entry.options.get("buy_top", entry.data.get("buy_top", 5))
     sell_top = entry.options.get("sell_top", entry.data.get("sell_top", 5))
