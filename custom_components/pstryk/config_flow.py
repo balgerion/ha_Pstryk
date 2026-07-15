@@ -67,6 +67,7 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "buy_worst": user_input["buy_worst"],
                 "sell_worst": user_input["sell_worst"],
             })
+            self._options[CONF_JSON_SENSOR] = user_input.get(CONF_JSON_SENSOR, False)
             
             mqtt_available = await self._check_mqtt_configuration()
             if mqtt_available:
@@ -81,6 +82,7 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required("sell_top", default=5): vol.All(vol.Coerce(int), vol.Range(min=1, max=24)),
                 vol.Required("buy_worst", default=5): vol.All(vol.Coerce(int), vol.Range(min=1, max=24)),
                 vol.Required("sell_worst", default=5): vol.All(vol.Coerce(int), vol.Range(min=1, max=24)),
+                vol.Required(CONF_JSON_SENSOR, default=False): bool,
             })
         )
 
