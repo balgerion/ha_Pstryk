@@ -102,42 +102,18 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 _LOGGER.error("Specified entry_id %s not found", entry_id)
                 return
                 
-        for entry in config_entries:
-            mqtt_topic_buy = topic_buy_override or entry.options.get(CONF_MQTT_TOPIC_BUY, DEFAULT_MQTT_TOPIC_BUY)
-            mqtt_topic_sell = topic_sell_override or entry.options.get(CONF_MQTT_TOPIC_SELL, DEFAULT_MQTT_TOPIC_SELL)
-            
-            success = await publish_mqtt_prices(hass, entry.entry_id, mqtt_topic_buy, mqtt_topic_sell)
-            
-            if not success:
-                _LOGGER.error("Failed to publish initial retained messages for entry %s", entry.entry_id)
-                continue
-            
-            _LOGGER.info(
-                "Setting up scheduled retain for topics %s and %s for %d hours", 
-                mqtt_topic_buy,
-                mqtt_topic_sell,
-                retain_hours
-            )
-            
-            now = dt_util.now()
-            end_time = now + timedelta(hours=retain_hours)
-            
-            retain_key = f"{entry.entry_id}_retain_unsub"
-            if retain_key in hass.data[DOMAIN]:
-                hass.data[DOMAIN][retain_key]()
-                hass.data[DOMAIN].pop(retain_key, None)
-            
+        def make_republisher(entry_id, topic_buy, topic_sell, retain_key, end_time):
             async def republish_retain(now=None):
                 """Republish retained messages periodically."""
-                success = await publish_mqtt_prices(hass, entry.entry_id, mqtt_topic_buy, mqtt_topic_sell)
-                
+                success = await publish_mqtt_prices(hass, entry_id, topic_buy, topic_sell)
+
                 if success:
                     current_time = dt_util.now()
                     _LOGGER.debug(
                         "Re-published retained messages (will continue until %s)",
                         end_time.strftime("%Y-%m-%d %H:%M:%S")
                     )
-                    
+
                     if current_time >= end_time:
                         _LOGGER.info(
                             "Finished scheduled retain after %d hours",
@@ -151,12 +127,43 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     hass.data[DOMAIN][retain_key] = async_track_point_in_time(
                         hass, republish_retain, dt_util.as_utc(next_run)
                     )
-            
+
+            return republish_retain
+
+        for entry in config_entries:
+            mqtt_topic_buy = topic_buy_override or entry.options.get(CONF_MQTT_TOPIC_BUY, DEFAULT_MQTT_TOPIC_BUY)
+            mqtt_topic_sell = topic_sell_override or entry.options.get(CONF_MQTT_TOPIC_SELL, DEFAULT_MQTT_TOPIC_SELL)
+
+            success = await publish_mqtt_prices(hass, entry.entry_id, mqtt_topic_buy, mqtt_topic_sell)
+
+            if not success:
+                _LOGGER.error("Failed to publish initial retained messages for entry %s", entry.entry_id)
+                continue
+
+            _LOGGER.info(
+                "Setting up scheduled retain for topics %s and %s for %d hours",
+                mqtt_topic_buy,
+                mqtt_topic_sell,
+                retain_hours
+            )
+
+            now = dt_util.now()
+            end_time = now + timedelta(hours=retain_hours)
+
+            retain_key = f"{entry.entry_id}_retain_unsub"
+            if retain_key in hass.data[DOMAIN]:
+                hass.data[DOMAIN][retain_key]()
+                hass.data[DOMAIN].pop(retain_key, None)
+
+            republish_retain = make_republisher(
+                entry.entry_id, mqtt_topic_buy, mqtt_topic_sell, retain_key, end_time
+            )
+
             next_run = now + timedelta(hours=1)
             hass.data[DOMAIN][retain_key] = async_track_point_in_time(
                 hass, republish_retain, dt_util.as_utc(next_run)
             )
-            
+
             _LOGGER.info(
                 "Forced retain activated with hourly re-publishing for %d hours",
                 retain_hours
