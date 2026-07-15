@@ -1,0 +1,15 @@
+{
+  "domain": "pstryk",
+  "name": "Pstryk Energy",
+  "version": "2.0.0",
+  "codeowners": ["@balgerion"],
+  "requirements": ["aiohttp>=3.7"],
+  "dependencies": ["mqtt"],
+  "iot_class": "cloud_polling",
+  "config_flow": true,
+  "documentation": "https://github.com/balgerion/ha_Pstryk",
+  "issue_tracker": "https://github.com/balgerion/ha_Pstryk/issues",
+  "platforms": ["sensor"],
+  "logo": "logo.png",
+  "diagnostics": true
+}
