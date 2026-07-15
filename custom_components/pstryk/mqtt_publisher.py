@@ -1,11 +1,7 @@
 import logging
-import json
 from datetime import timedelta
-import asyncio
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
-from homeassistant.components import mqtt
-from homeassistant.helpers.event import async_track_time_interval
 
 from .const import (
     DOMAIN,
@@ -29,9 +25,7 @@ class PstrykMqttPublisher:
         self.entry_id = entry_id
         self.mqtt_topic_buy = mqtt_topic_buy
         self.mqtt_topic_sell = mqtt_topic_sell
-        self._publish_task = None
         self._initialized = False
-        self._unsub_timer = None
         self._last_published = None
 
     async def async_initialize(self):
