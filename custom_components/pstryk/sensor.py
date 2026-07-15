@@ -200,6 +200,7 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         self.top_count = top_count
         self.worst_count = worst_count
         self.entry_id = entry_id
+        self.entity_id = f"sensor.{DOMAIN}_current_{price_type}_price"
         self._cached_sorted_prices = None
         self._last_data_hash = None
         
@@ -672,6 +673,7 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
         self.price_type = price_coordinator.price_type
         self.period = period
         self.entry_id = entry_id
+        self.entity_id = f"sensor.{DOMAIN}_{self.price_type}_{period}_average"
         self._state = None
         self._energy_bought = 0.0
         self._energy_sold = 0.0
@@ -803,6 +805,7 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
         self.period = period
         self.entry_id = entry_id
+        self.entity_id = f"sensor.{DOMAIN}_{period}_financial_balance"
         
     @property
     def name(self) -> str:
