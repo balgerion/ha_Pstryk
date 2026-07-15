@@ -8,7 +8,7 @@ from homeassistant.components.sensor import SensorEntity, SensorStateClass, Sens
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
-from .update_coordinator import PstrykDataUpdateCoordinator
+from .update_coordinator import PstrykDataUpdateCoordinator, is_likely_placeholder_data
 from .energy_cost_coordinator import PstrykCostDataUpdateCoordinator
 from .api_client import PstrykAPIClient
 from .const import (
@@ -72,28 +72,7 @@ async def async_setup_entry(
             _LOGGER.warning("Failed to load translations: %s", ex)
             _TRANSLATIONS_CACHE = {}
 
-    for price_type in ("buy", "sell"):
-        key = f"{entry.entry_id}_{price_type}"
-        coordinator = hass.data[DOMAIN].get(key)
-        if coordinator:
-            _LOGGER.debug("Cleaning up existing %s coordinator", price_type)
-            if hasattr(coordinator, '_unsub_hourly') and coordinator._unsub_hourly:
-                coordinator._unsub_hourly()
-            if hasattr(coordinator, '_unsub_midnight') and coordinator._unsub_midnight:
-                coordinator._unsub_midnight()
-            if hasattr(coordinator, '_unsub_afternoon') and coordinator._unsub_afternoon:
-                coordinator._unsub_afternoon()
-            hass.data[DOMAIN].pop(key, None)
-
     cost_key = f"{entry.entry_id}_cost"
-    cost_coordinator = hass.data[DOMAIN].get(cost_key)
-    if cost_coordinator:
-        _LOGGER.debug("Cleaning up existing cost coordinator")
-        if hasattr(cost_coordinator, '_unsub_hourly') and cost_coordinator._unsub_hourly:
-            cost_coordinator._unsub_hourly()
-        if hasattr(cost_coordinator, '_unsub_midnight') and cost_coordinator._unsub_midnight:
-            cost_coordinator._unsub_midnight()
-        hass.data[DOMAIN].pop(cost_key, None)
 
     api_client_key = f"{entry.entry_id}_api_client"
     if api_client_key not in hass.data[DOMAIN]:
@@ -113,7 +92,8 @@ async def async_setup_entry(
             price_type,
             mqtt_48h_mode,
             retry_attempts,
-            retry_delay
+            retry_delay,
+            entry.entry_id
         )
         coordinators.append((coordinator, price_type, key))
 
@@ -410,39 +390,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         
         return self._cached_sorted_prices
     
-    def _is_likely_placeholder_data(self, prices_for_day):
-        """Check if prices for a day are likely placeholders.
-        
-        Returns True if:
-        - There are no prices
-        - ALL prices have exactly the same value (suggesting API returned default values)
-        - There are too many consecutive hours with the same value (e.g., 10+ hours)
-        """
-        if not prices_for_day:
-            return True
-            
-        price_values = [p.get("price") for p in prices_for_day if p.get("price") is not None]
-        
-        if not price_values:
-            return True
-        
-        if len(price_values) < 20:
-            _LOGGER.debug(f"Only {len(price_values)} prices for the day, likely incomplete data")
-            return True
-            
-        unique_values = set(price_values)
-        if len(unique_values) == 1:
-            _LOGGER.debug(f"All {len(price_values)} prices have the same value ({price_values[0]}), likely placeholders")
-            return True
-        
-        most_common_value = max(set(price_values), key=price_values.count)
-        count_most_common = price_values.count(most_common_value)
-        if count_most_common / len(price_values) > 0.9:
-            _LOGGER.debug(f"{count_most_common}/{len(price_values)} prices have value {most_common_value}, likely placeholders")
-            return True
-            
-        return False
-    
     def _count_consecutive_same_values(self, prices):
         """Count maximum consecutive hours with the same price."""
         if not prices:
@@ -486,7 +433,7 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
             
             valid_count = len(today_prices)
             
-            if tomorrow_prices and not self._is_likely_placeholder_data(tomorrow_prices):
+            if tomorrow_prices and not is_likely_placeholder_data(tomorrow_prices):
                 valid_count += len(tomorrow_prices)
             
             return valid_count
@@ -701,7 +648,7 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         
         tomorrow_available = (
             len(tomorrow_prices) >= 20 and 
-            not self._is_likely_placeholder_data(tomorrow_prices)
+            not is_likely_placeholder_data(tomorrow_prices)
         )
         
         sorted_prices = self._get_cached_sorted_prices(today) if today else {"best": [], "worst": []}
