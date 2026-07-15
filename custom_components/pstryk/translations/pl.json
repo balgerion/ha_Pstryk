@@ -65,7 +65,13 @@
     "step": {
       "init": {
         "title": "Opcje Pstryk Energy",
-        "description": "Zmodyfikuj konfigurację Pstryk Energy"
+        "description": "Zmodyfikuj konfigurację Pstryk Energy",
+        "data": {
+          "json_sensor_enabled": "Włącz sensory JSON z cenami"
+        },
+        "data_description": {
+          "json_sensor_enabled": "Dodaje sensory Pstryk Json Buy/Sell ze standardowymi atrybutami prices_today, prices_tomorrow i prices (kompatybilne z EV Smart Charging, cheapest-energy-hours itp.)"
+        }
       },
       "price_settings": {
         "title": "Ustawienia Monitorowania Cen",
@@ -142,7 +148,6 @@
       "energy_sold": "Sprzedana energia",
       "balance": "Saldo",
       "period_daily": "Dzienny",
-      "buy_cost": "Koszt zakupu",
       "distribution_cost": "Koszt dystrybucji",
       "excise": "Akcyza",
       "vat": "VAT",
