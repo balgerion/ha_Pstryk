@@ -1,4 +1,3 @@
-"""Data update coordinator for Pstryk Energy integration."""
 import logging
 import json
 import os
@@ -22,7 +21,6 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def convert_price(value):
-    """Convert price string to float."""
     if value is None:
         return None
     try:
@@ -33,7 +31,6 @@ def convert_price(value):
 
 
 def is_likely_placeholder_data(prices_for_day):
-    """Check if prices for a day are likely placeholders."""
     if not prices_for_day:
         return True
 
@@ -54,10 +51,8 @@ def is_likely_placeholder_data(prices_for_day):
 
 
 class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
-    """Coordinator to fetch both current price and today's table."""
 
     def __init__(self, hass, api_client: PstrykAPIClient, price_type, mqtt_48h_mode=False, retry_attempts=None, retry_delay=None, entry_id=None):
-        """Initialize the coordinator."""
         self.hass = hass
         self.api_client = api_client
         self.price_type = price_type
@@ -88,14 +83,12 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     def _extract_price_value(self, frame):
-        """Return normalized gross price for buy or prosumer sell frames."""
         metrics = frame.get("metrics", {})
         pricing = metrics.get("pricing", {})
         price_key = "price_gross" if self.price_type == "buy" else "price_prosumer_gross"
 
         return convert_price(frame.get(price_key, pricing.get(price_key)))
     async def _load_cache(self) -> dict[str, Any] | None:
-        """Load cached data from disk."""
         if not os.path.exists(self._cache_file):
             return None
 
@@ -119,7 +112,6 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         return await asyncio.to_thread(_read)
 
     async def _save_cache(self, data: dict[str, Any]) -> None:
-        """Persist data to disk."""
         def _write() -> None:
             try:
                 data["last_updated"] = dt_util.now().isoformat()
@@ -132,7 +124,6 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         await asyncio.to_thread(_write)
 
     def _check_has_valid_tomorrow(self, data: dict) -> bool:
-        """Check if data contains valid tomorrow prices."""
         now = dt_util.now()
         tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
 
@@ -142,7 +133,6 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         return len(tomorrow_prices) >= 20 and not is_likely_placeholder_data(tomorrow_prices)
 
     async def _check_and_publish_mqtt(self, new_data):
-        """Check if we should publish to MQTT after update."""
         if not self.mqtt_48h_mode:
             return
 
@@ -188,7 +178,6 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         self._had_tomorrow_prices = has_valid_tomorrow_prices
 
     async def _async_update_data(self):
-        """Fetch 48h of frames and extract current + today's list."""
         _LOGGER.debug("Starting %s price update (48h mode: %s)", self.price_type, self.mqtt_48h_mode)
 
         today_local = dt_util.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -279,7 +268,6 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
             ).format(error=err)) from err
 
     def schedule_hourly_update(self):
-        """Schedule next refresh - 5s after full hour (uses cache, no API delay needed)."""
         if self._unsub_hourly:
             self._unsub_hourly()
             self._unsub_hourly = None
@@ -296,7 +284,6 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     async def _handle_hourly_update(self, _):
-        """Handle hourly update - READ FROM CACHE (no API call)."""
         _LOGGER.debug("Hourly update for %s - loading from cache", self.price_type)
 
         cached_data = self.data or await self._load_cache()
@@ -358,7 +345,6 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         self.schedule_hourly_update()
 
     def schedule_midnight_update(self):
-        """Schedule next refresh 1 min after local midnight."""
         if self._unsub_midnight:
             self._unsub_midnight()
             self._unsub_midnight = None
@@ -374,7 +360,6 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     async def _handle_midnight_update(self, _):
-        """Handle midnight update - FETCH FRESH DATA from API."""
         _LOGGER.info("Midnight update for %s - fetching fresh data from API", self.price_type)
         self._has_tomorrow = False
 
@@ -403,7 +388,6 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         self.schedule_midnight_update()
 
     def schedule_afternoon_update(self):
-        """Schedule frequent updates between 14:00-15:00 for 48h mode."""
         if self._unsub_afternoon:
             self._unsub_afternoon()
             self._unsub_afternoon = None
@@ -444,7 +428,6 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     async def _handle_afternoon_update(self, _):
-        """Handle afternoon update - check for tomorrow prices (14:00-15:00)."""
         now = dt_util.now()
 
         if not self.mqtt_48h_mode:
