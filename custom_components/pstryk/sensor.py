@@ -188,11 +188,12 @@ async def async_setup_entry(
             cost_coordinator.last_update_success = False
             cost_coordinator.data = None
 
-    hass.async_create_task(lazy_load_cost_data())
+    entry.async_create_background_task(hass, lazy_load_cost_data(), f"{DOMAIN}_lazy_cost_load")
 
 
 class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _unrecorded_attributes = frozenset({"All prices", "Best prices", "Worst prices"})
 
     def __init__(self, coordinator: PstrykDataUpdateCoordinator, price_type: str, top_count: int, worst_count: int, entry_id: str):
         super().__init__(coordinator)
@@ -594,6 +595,7 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
 class PstrykJsonPriceSensor(CoordinatorEntity, SensorEntity):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:code-json"
+    _unrecorded_attributes = frozenset({"prices_today", "prices_tomorrow", "prices"})
 
     def __init__(self, coordinator: PstrykDataUpdateCoordinator, price_type: str, entry_id: str):
         super().__init__(coordinator)
