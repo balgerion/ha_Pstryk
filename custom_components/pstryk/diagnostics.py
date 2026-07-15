@@ -1,4 +1,3 @@
-"""Diagnostics support for Pstryk Energy."""
 from __future__ import annotations
 
 import logging
@@ -26,7 +25,6 @@ _LOGGER = logging.getLogger(__name__)
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> dict[str, Any]:
-    """Return diagnostics for a config entry."""
     diagnostics_data = {
         "entry": {
             "title": entry.title,
