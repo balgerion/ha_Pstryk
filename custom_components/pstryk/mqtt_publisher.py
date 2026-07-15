@@ -5,7 +5,6 @@ import asyncio
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 from homeassistant.components import mqtt
-from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.event import async_track_time_interval
 
 from .const import (
@@ -32,21 +31,10 @@ class PstrykMqttPublisher:
         self.mqtt_topic_sell = mqtt_topic_sell
         self._publish_task = None
         self._initialized = False
-        self._translations = {}
         self._unsub_timer = None
         self._last_published = None
 
     async def async_initialize(self):
-        if self._initialized:
-            return True
-            
-        try:
-            self._translations = await async_get_translations(
-                self.hass, self.hass.config.language, DOMAIN, ["mqtt"]
-            )
-        except Exception as ex:
-            _LOGGER.warning("Failed to load translations for MQTT publisher: %s", ex)
-            
         self._initialized = True
         return True
     
