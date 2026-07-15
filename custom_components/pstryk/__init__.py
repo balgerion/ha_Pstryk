@@ -1,4 +1,3 @@
-"""Pstryk Energy integration."""
 import logging
 import asyncio
 from homeassistant.config_entries import ConfigEntry
@@ -22,7 +21,6 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up hass.data structure and services."""
     hass.data.setdefault(DOMAIN, {})
     
     await async_setup_services(hass)
@@ -30,7 +28,6 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     return True
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Store API key and forward to sensor platform."""
     hass.data[DOMAIN].setdefault(entry.entry_id, {})["api_key"] = entry.data.get("api_key")
     
     if not entry.update_listeners:
@@ -80,7 +77,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN][f"{entry.entry_id}_mqtt"] = mqtt_publisher
         
         async def start_mqtt_publisher():
-            """Start the MQTT publisher after a short delay to ensure coordinators are ready."""
             await mqtt_publisher.async_initialize()
             
             max_wait = 60
@@ -120,7 +116,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 async def _cleanup_coordinators(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Clean up coordinators and cancel scheduled tasks."""
     retain_key = f"{entry.entry_id}_auto_retain"
     if retain_key in hass.data[DOMAIN] and callable(hass.data[DOMAIN][retain_key]):
         hass.data[DOMAIN][retain_key]()
@@ -168,7 +163,6 @@ async def _cleanup_coordinators(hass: HomeAssistant, entry: ConfigEntry) -> None
         hass.data[DOMAIN].pop(api_client_key, None)
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload sensor platform and clear data."""
     await _cleanup_coordinators(hass, entry)
     
     unload_ok = await hass.config_entries.async_forward_entry_unload(entry, "sensor")
@@ -188,6 +182,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload the config entry when options change."""
     await async_unload_entry(hass, entry)
     await async_setup_entry(hass, entry)
