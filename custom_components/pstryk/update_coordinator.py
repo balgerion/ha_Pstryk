@@ -267,6 +267,14 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     async def _handle_hourly_update(self, _):
+        now = dt_util.now()
+        if now.hour == 0 and now.minute < 1:
+            _LOGGER.debug("Midnight tick for %s - refreshing sensors from 48h data, API fetch follows at 00:01", self.price_type)
+            if self.data:
+                self.async_update_listeners()
+            self.schedule_hourly_update()
+            return
+
         _LOGGER.debug("Hourly update for %s - loading from cache", self.price_type)
 
         cached_data = self.data or await self._load_cache()
@@ -310,6 +318,7 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
 
             cached_data["is_cached"] = True
             self.data = cached_data
+            self.last_update_success = True
             self._has_tomorrow = cached_data.get("has_tomorrow", False)
             self.async_update_listeners()
             _LOGGER.debug("Loaded %s data from cache (has_tomorrow=%s)",
