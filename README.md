@@ -98,19 +98,34 @@ Przykładowy wykres cen 48h ([apexcharts-card](https://github.com/RomRider/apexc
 type: custom:apexcharts-card
 header:
   show: true
+  show_states: true
+  colorize_states: true
 graph_span: 48h
 span:
   start: day
+now:
+  show: true
+  label: teraz
 series:
   - entity: sensor.pstryk_json_buy
     name: Buy Price
+    float_precision: 2
+    show:
+      legend_value: false
+      in_header: raw
     data_generator: |
       return entity.attributes.prices.map(i => [new Date(i.time).getTime(), i.price]);
   - entity: sensor.pstryk_json_sell
     name: Sell Price
+    float_precision: 2
+    show:
+      legend_value: false
+      in_header: raw
     data_generator: |
       return entity.attributes.prices.map(i => [new Date(i.time).getTime(), i.price]);
 ```
+
+Nagłówek karty pokazuje aktualną cenę (stan sensora, odświeżany co godzinę), a pionowa linia "teraz" zaznacza bieżącą godzinę na osi 48h.
 
 Przykładowa Automatyzacja:
 
@@ -131,7 +146,7 @@ conditions:
       microsecond=0).isoformat(timespec='seconds').split('+')[0] %}
 
       {% set best_hours = state_attr('sensor.pstryk_current_buy_price',
-      'best_prices') | map(attribute='start') | list %}
+      'Best prices') | map(attribute='start') | list %}
 
       {{ current_hour in best_hours }}
 actions:
@@ -152,7 +167,7 @@ actions:
           - data:
               message: |
                 Grzanie włączone! Godzina: {{ current_hour }}, Cena: {{
-                  state_attr('sensor.pstryk_current_buy_price', 'best_prices')
+                  state_attr('sensor.pstryk_current_buy_price', 'Best prices')
                   | selectattr('start', 'equalto', current_hour)
                   | map(attribute='price')
                   | first
