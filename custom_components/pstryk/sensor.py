@@ -593,7 +593,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
 
 
 class PstrykJsonPriceSensor(CoordinatorEntity, SensorEntity):
-    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:code-json"
     _unrecorded_attributes = frozenset({"prices_today", "prices_tomorrow", "prices"})
 
