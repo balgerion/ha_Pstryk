@@ -161,7 +161,9 @@
   "mqtt": {
     "publishing_success": "Pomyślnie opublikowano {count} cen do tematu MQTT {topic}",
     "publishing_error": "Błąd publikowania do MQTT: {error}",
-    "mqtt_disabled": "Integracja MQTT nie jest włączona"
+    "mqtt_disabled": "Integracja MQTT nie jest włączona",
+    "mqtt_not_configured_title": "Pstryk Energy – błąd MQTT",
+    "mqtt_not_configured_message": "Integracja MQTT nie jest włączona. Mostek MQTT (EVCC) dla Pstryk Energy nie może działać. Skonfiguruj integrację MQTT w Home Assistant."
   },
   "debug": {
     "looking_for_next_hour": "Szukam ceny dla następnej godziny: {next_hour}",
