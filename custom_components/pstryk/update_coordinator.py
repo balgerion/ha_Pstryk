@@ -32,14 +32,36 @@ def convert_price(value):
         return None
 
 
+def is_likely_placeholder_data(prices_for_day):
+    """Check if prices for a day are likely placeholders."""
+    if not prices_for_day:
+        return True
+
+    price_values = [p.get("price") for p in prices_for_day if p.get("price") is not None]
+
+    if len(price_values) < 20:
+        _LOGGER.debug("Only %d prices for the day, likely incomplete data", len(price_values))
+        return True
+
+    most_common_value = max(set(price_values), key=price_values.count)
+    count_most_common = price_values.count(most_common_value)
+    if count_most_common / len(price_values) > 0.9:
+        _LOGGER.debug("%d/%d prices have value %s, likely placeholders",
+                      count_most_common, len(price_values), most_common_value)
+        return True
+
+    return False
+
+
 class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
     """Coordinator to fetch both current price and today's table."""
 
-    def __init__(self, hass, api_client: PstrykAPIClient, price_type, mqtt_48h_mode=False, retry_attempts=None, retry_delay=None):
+    def __init__(self, hass, api_client: PstrykAPIClient, price_type, mqtt_48h_mode=False, retry_attempts=None, retry_delay=None, entry_id=None):
         """Initialize the coordinator."""
         self.hass = hass
         self.api_client = api_client
         self.price_type = price_type
+        self.entry_id = entry_id
         self.mqtt_48h_mode = mqtt_48h_mode
         self._unsub_hourly = None
         self._unsub_midnight = None
@@ -117,38 +139,7 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         all_prices = data.get("prices", [])
         tomorrow_prices = [p for p in all_prices if p.get("start", "").startswith(tomorrow)]
 
-        has_valid = (
-            len(tomorrow_prices) >= 20 and
-            not self._is_likely_placeholder_data(tomorrow_prices)
-        )
-
-        return has_valid
-    def _is_likely_placeholder_data(self, prices_for_day):
-        """Check if prices for a day are likely placeholders."""
-        if not prices_for_day:
-            return True
-
-        price_values = [p.get("price") for p in prices_for_day if p.get("price") is not None]
-
-        if not price_values:
-            return True
-
-        if len(price_values) < 20:
-            _LOGGER.debug(f"Only {len(price_values)} prices for the day, likely incomplete data")
-            return True
-
-        unique_values = set(price_values)
-        if len(unique_values) == 1:
-            _LOGGER.debug(f"All {len(price_values)} prices have the same value ({price_values[0]}), likely placeholders")
-            return True
-
-        most_common_value = max(set(price_values), key=price_values.count)
-        count_most_common = price_values.count(most_common_value)
-        if count_most_common / len(price_values) > 0.9:
-            _LOGGER.debug(f"{count_most_common}/{len(price_values)} prices have value {most_common_value}, likely placeholders")
-            return True
-
-        return False
+        return len(tomorrow_prices) >= 20 and not is_likely_placeholder_data(tomorrow_prices)
 
     async def _check_and_publish_mqtt(self, new_data):
         """Check if we should publish to MQTT after update."""
@@ -163,17 +154,13 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
 
         has_valid_tomorrow_prices = (
             len(tomorrow_prices) >= 20 and
-            not self._is_likely_placeholder_data(tomorrow_prices)
+            not is_likely_placeholder_data(tomorrow_prices)
         )
 
         if not self._had_tomorrow_prices and has_valid_tomorrow_prices:
             _LOGGER.info("Valid tomorrow prices detected for %s, triggering immediate MQTT publish", self.price_type)
 
-            entry_id = None
-            for entry in self.hass.config_entries.async_entries(DOMAIN):
-                if self.api_client.api_key == entry.data.get("api_key"):
-                    entry_id = entry.entry_id
-                    break
+            entry_id = self.entry_id
 
             if entry_id:
                 buy_coordinator = self.hass.data[DOMAIN].get(f"{entry_id}_buy")
@@ -312,7 +299,7 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         """Handle hourly update - READ FROM CACHE (no API call)."""
         _LOGGER.debug("Hourly update for %s - loading from cache", self.price_type)
 
-        cached_data = await self._load_cache()
+        cached_data = self.data or await self._load_cache()
 
         if cached_data:
             last_updated = cached_data.get("last_updated", "")
