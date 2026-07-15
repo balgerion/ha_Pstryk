@@ -1,4 +1,3 @@
-"""MQTT Publisher for Pstryk Energy integration."""
 import logging
 import json
 from datetime import timedelta
@@ -19,7 +18,6 @@ from .update_coordinator import is_likely_placeholder_data
 _LOGGER = logging.getLogger(__name__)
 
 class PstrykMqttPublisher:
-    """Class to handle publishing Pstryk energy prices to MQTT for EVCC."""
 
     def __init__(
         self, 
@@ -28,7 +26,6 @@ class PstrykMqttPublisher:
         mqtt_topic_buy: str = DEFAULT_MQTT_TOPIC_BUY,
         mqtt_topic_sell: str = DEFAULT_MQTT_TOPIC_SELL
     ):
-        """Initialize the MQTT publisher."""
         self.hass = hass
         self.entry_id = entry_id
         self.mqtt_topic_buy = mqtt_topic_buy
@@ -40,7 +37,6 @@ class PstrykMqttPublisher:
         self._last_published = None
 
     async def async_initialize(self):
-        """Initialize the publisher and load translations."""
         if self._initialized:
             return True
             
@@ -55,17 +51,6 @@ class PstrykMqttPublisher:
         return True
     
     def _format_prices_for_evcc(self, prices_data, price_type):
-        """Format prices in EVCC expected format.
-        
-        EVCC expects a list of objects with the following structure:
-        [
-            {
-                "start": "2024-05-07T00:00:00Z", // ISO timestamp in UTC
-                "end": "2024-05-07T01:00:00Z",   // ISO timestamp in UTC (next hour)
-                "value": 0.1234                  // Price in PLN/kWh
-            }
-        ]
-        """
         if not prices_data or "prices" not in prices_data:
             return []
             
@@ -171,7 +156,6 @@ class PstrykMqttPublisher:
         return formatted_prices
 
     async def publish_prices(self):
-        """Publish prices to MQTT using common function."""
         from .mqtt_common import publish_mqtt_prices
         
         success = await publish_mqtt_prices(
@@ -187,7 +171,6 @@ class PstrykMqttPublisher:
         return success
 
     async def schedule_periodic_updates(self, interval_minutes=60):
-        """Schedule periodic updates to MQTT (default: 60 minutes)."""
         from .mqtt_common import setup_periodic_mqtt_publish
         
         await setup_periodic_mqtt_publish(
@@ -201,10 +184,8 @@ class PstrykMqttPublisher:
         return True
 
     def unsubscribe(self):
-        """Unsubscribe from all events."""
         _LOGGER.debug("MQTT publisher cleanup requested")
             
     @property
     def last_published(self):
-        """Return the timestamp of the last successful publish."""
         return self._last_published
