@@ -23,6 +23,8 @@ _LOGGER = logging.getLogger(__name__)
 
 def convert_price(value):
     """Convert price string to float."""
+    if value is None:
+        return None
     try:
         return round(float(str(value).replace(",", ".").strip()), 2)
     except (ValueError, TypeError) as e:
