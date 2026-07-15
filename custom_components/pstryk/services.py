@@ -1,4 +1,3 @@
-"""Services for Pstryk Energy integration."""
 import logging
 import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall, callback
@@ -38,10 +37,8 @@ FORCE_RETAIN_SCHEMA = vol.Schema({
 })
 
 async def async_setup_services(hass: HomeAssistant) -> None:
-    """Set up services for Pstryk integration."""
     
     async def async_publish_mqtt_service(service_call: ServiceCall) -> None:
-        """Handle the service call to publish to MQTT."""
         entry_id = service_call.data.get("entry_id")
         topic_buy_override = service_call.data.get("topic_buy")
         topic_sell_override = service_call.data.get("topic_sell")
@@ -85,7 +82,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 _LOGGER.error("Failed to publish to MQTT for entry %s", entry.entry_id)
     
     async def async_force_retain_service(service_call: ServiceCall) -> None:
-        """Handle the service call to force retain MQTT messages permanently."""
         entry_id = service_call.data.get("entry_id")
         topic_buy_override = service_call.data.get("topic_buy")
         topic_sell_override = service_call.data.get("topic_sell")
@@ -104,7 +100,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 
         def make_republisher(entry_id, topic_buy, topic_sell, retain_key, end_time):
             async def republish_retain(now=None):
-                """Republish retained messages periodically."""
                 success = await publish_mqtt_prices(hass, entry_id, topic_buy, topic_sell)
 
                 if success:
@@ -184,7 +179,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     )
 
 async def async_unload_services(hass: HomeAssistant) -> None:
-    """Unload Pstryk services."""
     if hass.services.has_service(DOMAIN, SERVICE_PUBLISH_MQTT):
         hass.services.async_remove(DOMAIN, SERVICE_PUBLISH_MQTT)
         
