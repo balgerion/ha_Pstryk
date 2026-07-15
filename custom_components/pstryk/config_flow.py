@@ -74,7 +74,7 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "sell_worst": user_input["sell_worst"],
             })
             
-            mqtt_available = await self._check_mqtt_availability()
+            mqtt_available = await self._check_mqtt_configuration()
             if mqtt_available:
                 return await self.async_step_mqtt_settings()
             else:
@@ -169,13 +169,6 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     
     async def _check_mqtt_configuration(self):
         """Check if MQTT integration is properly configured."""
-        try:
-            return self.hass.services.has_service("mqtt", "publish")
-        except Exception:
-            return False
-    
-    async def _check_mqtt_availability(self):
-        """Check if MQTT integration is available (not necessarily configured)."""
         try:
             return self.hass.services.has_service("mqtt", "publish")
         except Exception:
