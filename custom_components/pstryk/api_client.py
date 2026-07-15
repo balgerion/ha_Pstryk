@@ -9,7 +9,6 @@ import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import UpdateFailed
-from homeassistant.helpers.translation import async_get_translations
 
 from .const import API_URL, API_TIMEOUT, DOMAIN
 
@@ -22,8 +21,6 @@ class PstrykAPIClient:
         self.hass = hass
         self.api_key = api_key
         self._session: Optional[aiohttp.ClientSession] = None
-        self._translations: Dict[str, str] = {}
-        self._translations_loaded = False
 
         self._rate_limits: Dict[str, Dict[str, Any]] = {}
         self._rate_limit_lock = asyncio.Lock()
@@ -38,53 +35,6 @@ class PstrykAPIClient:
         if self._session is None:
             self._session = async_get_clientsession(self.hass)
         return self._session
-
-    async def _load_translations(self):
-        if not self._translations_loaded:
-            try:
-                self._translations = await async_get_translations(
-                    self.hass, self.hass.config.language, DOMAIN, ["debug"]
-                )
-                self._translations_loaded = True
-                if self._translations:
-                    sample_keys = list(self._translations.keys())[:3]
-                    _LOGGER.debug("Loaded %d translation keys, samples: %s",
-                                len(self._translations), sample_keys)
-            except Exception as ex:
-                _LOGGER.warning("Failed to load translations for API client: %s", ex)
-                self._translations = {}
-                self._translations_loaded = True
-
-    def _t(self, key: str, **kwargs) -> str:
-        possible_keys = [
-            f"component.{DOMAIN}.debug.{key}",
-            f"{DOMAIN}.debug.{key}",
-            f"debug.{key}",
-            key
-        ]
-
-        template = None
-        for possible_key in possible_keys:
-            template = self._translations.get(possible_key)
-            if template:
-                break
-
-        if not template:
-            if key == "api_error_html":
-                template = "API error {status} for {endpoint} (HTML error page received)"
-            elif key == "rate_limited":
-                template = "Endpoint '{endpoint}' is rate limited. Will retry after {seconds} seconds"
-            elif key == "waiting_rate_limit":
-                template = "Waiting {seconds} seconds for rate limit to clear"
-            else:
-                _LOGGER.debug("Translation key not found: %s (tried formats: %s)", key, possible_keys)
-                template = key
-
-        try:
-            return template.format(**kwargs)
-        except (KeyError, ValueError) as e:
-            _LOGGER.warning("Failed to format translation template '%s': %s", template, e)
-            return template
 
     def _get_endpoint_key(self, url: str) -> str:
         if "meter-data/unified-metrics" in url:
@@ -111,7 +61,6 @@ class PstrykAPIClient:
         return max(1.0, backoff + jitter)
 
     async def _handle_rate_limit(self, response: aiohttp.ClientResponse, endpoint_key: str):
-        await self._load_translations()
 
         retry_after_header = response.headers.get("Retry-After")
         wait_time = None
@@ -138,7 +87,7 @@ class PstrykAPIClient:
             }
 
         _LOGGER.warning(
-            self._t("rate_limited", endpoint=endpoint_key, seconds=int(wait_time))
+            "Endpoint %s is rate limited. Will retry after %d seconds", endpoint_key, int(wait_time)
         )
 
 
@@ -148,7 +97,6 @@ class PstrykAPIClient:
         max_retries: int = 3,
         base_delay: float = 20.0
     ) -> Dict[str, Any]:
-        await self._load_translations()
 
         endpoint_key = self._get_endpoint_key(url)
 
@@ -156,7 +104,7 @@ class PstrykAPIClient:
         if wait_time and wait_time > 0:
             if wait_time <= 60:
                 _LOGGER.info(
-                    self._t("waiting_rate_limit", seconds=int(wait_time))
+                    "Waiting %d seconds for rate limit to clear", int(wait_time)
                 )
                 await asyncio.sleep(wait_time)
             else:
@@ -200,7 +148,7 @@ class PstrykAPIClient:
                                 error_text = await response.text()
                                 if error_text.strip().startswith('<!doctype html>') or error_text.strip().startswith('<html'):
                                     _LOGGER.error(
-                                        self._t("api_error_html", status=500, endpoint=endpoint_key)
+                                        "API error 500 for %s (HTML error page received)", endpoint_key
                                     )
                                 else:
                                     _LOGGER.error(
@@ -235,7 +183,7 @@ class PstrykAPIClient:
                                 error_text = await response.text()
                                 if error_text.strip().startswith('<!doctype html>') or error_text.strip().startswith('<html'):
                                     _LOGGER.error(
-                                        self._t("api_error_html", status=response.status, endpoint=endpoint_key)
+                                        "API error %d for %s (HTML error page received)", response.status, endpoint_key
                                     )
                                 else:
                                     _LOGGER.error(
