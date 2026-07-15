@@ -108,7 +108,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await asyncio.sleep(5)
             await start_mqtt_publisher()
             
-        hass.async_create_task(delayed_start())
+        entry.async_create_background_task(hass, delayed_start(), f"{DOMAIN}_mqtt_delayed_start")
         
         _LOGGER.info("EVCC MQTT Bridge enabled for Pstryk Energy (48h mode: %s), publishing to %s and %s", 
                     mqtt_48h_mode, mqtt_topic_buy, mqtt_topic_sell)
@@ -116,10 +116,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 async def _cleanup_coordinators(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    retain_key = f"{entry.entry_id}_auto_retain"
-    if retain_key in hass.data[DOMAIN] and callable(hass.data[DOMAIN][retain_key]):
-        hass.data[DOMAIN][retain_key]()
-        hass.data[DOMAIN].pop(retain_key, None)
+    for retain_key in (f"{entry.entry_id}_auto_retain", f"{entry.entry_id}_retain_unsub"):
+        unsub = hass.data[DOMAIN].pop(retain_key, None)
+        if callable(unsub):
+            unsub()
     
     mqtt_publisher = hass.data[DOMAIN].get(f"{entry.entry_id}_mqtt")
     if mqtt_publisher:
