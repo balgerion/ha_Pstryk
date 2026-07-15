@@ -4,7 +4,6 @@ from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.components import mqtt
-from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.event import async_track_point_in_time
 from datetime import timedelta
 from homeassistant.util import dt as dt_util
@@ -43,20 +42,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         topic_buy_override = service_call.data.get("topic_buy")
         topic_sell_override = service_call.data.get("topic_sell")
         
-        try:
-            translations = await async_get_translations(
-                hass, hass.config.language, DOMAIN, ["mqtt"]
-            )
-        except Exception as e:
-            _LOGGER.warning("Failed to load translations for services: %s", e)
-            translations = {}
-            
         if not hass.services.has_service("mqtt", "publish"):
-            mqtt_disabled_msg = translations.get(
-                "mqtt.mqtt_disabled", 
-                "MQTT integration is not enabled"
-            )
-            _LOGGER.error(mqtt_disabled_msg)
+            _LOGGER.error("MQTT integration is not enabled")
             return
             
         config_entries = hass.config_entries.async_entries(DOMAIN)
