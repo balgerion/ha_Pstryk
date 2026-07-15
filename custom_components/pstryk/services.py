@@ -1,14 +1,12 @@
 import logging
 import voluptuous as vol
-from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.typing import ConfigType
-from homeassistant.components import mqtt
 from homeassistant.helpers.event import async_track_point_in_time
 from datetime import timedelta
 from homeassistant.util import dt as dt_util
 
-from .mqtt_common import publish_mqtt_prices, setup_periodic_mqtt_publish
+from .mqtt_common import publish_mqtt_prices
 from .const import (
     DOMAIN, 
     DEFAULT_MQTT_TOPIC_BUY, 
