@@ -23,10 +23,8 @@ from homeassistant.helpers.translation import async_get_translations
 
 _LOGGER = logging.getLogger(__name__)
 
-# Store translations globally to avoid reloading for each sensor
 _TRANSLATIONS_CACHE = {}
 
-# Cache for manifest version
 _VERSION_CACHE = None
 
 
@@ -67,7 +65,6 @@ async def async_setup_entry(
     _LOGGER.debug("Setting up Pstryk sensors with buy_top=%d, sell_top=%d, buy_worst=%d, sell_worst=%d, mqtt_48h_mode=%s, retry_attempts=%d, retry_delay=%ds", 
                  buy_top, sell_top, buy_worst, sell_worst, mqtt_48h_mode, retry_attempts, retry_delay)
 
-    # Load translations once for all sensors
     global _TRANSLATIONS_CACHE
     if not _TRANSLATIONS_CACHE:
         try:
@@ -78,23 +75,19 @@ async def async_setup_entry(
             _LOGGER.warning("Failed to load translations: %s", ex)
             _TRANSLATIONS_CACHE = {}
 
-    # Cleanup old coordinators if they exist
     for price_type in ("buy", "sell"):
         key = f"{entry.entry_id}_{price_type}"
         coordinator = hass.data[DOMAIN].get(key)
         if coordinator:
             _LOGGER.debug("Cleaning up existing %s coordinator", price_type)
-            # Cancel scheduled updates
             if hasattr(coordinator, '_unsub_hourly') and coordinator._unsub_hourly:
                 coordinator._unsub_hourly()
             if hasattr(coordinator, '_unsub_midnight') and coordinator._unsub_midnight:
                 coordinator._unsub_midnight()
             if hasattr(coordinator, '_unsub_afternoon') and coordinator._unsub_afternoon:
                 coordinator._unsub_afternoon()
-            # Remove from hass data
             hass.data[DOMAIN].pop(key, None)
 
-    # Cleanup old cost coordinator if exists
     cost_key = f"{entry.entry_id}_cost"
     cost_coordinator = hass.data[DOMAIN].get(cost_key)
     if cost_coordinator:
@@ -105,7 +98,6 @@ async def async_setup_entry(
             cost_coordinator._unsub_midnight()
         hass.data[DOMAIN].pop(cost_key, None)
 
-    # Create shared API client (or reuse existing one)
     api_client_key = f"{entry.entry_id}_api_client"
     if api_client_key not in hass.data[DOMAIN]:
         api_client = PstrykAPIClient(hass, api_key)
@@ -116,7 +108,6 @@ async def async_setup_entry(
     entities = []
     coordinators = []
 
-    # Create price coordinators first
     for price_type in ("buy", "sell"):
         key = f"{entry.entry_id}_{price_type}"
         coordinator = PstrykDataUpdateCoordinator(
@@ -129,7 +120,6 @@ async def async_setup_entry(
         )
         coordinators.append((coordinator, price_type, key))
 
-    # Create cost coordinator (will be initialized as unavailable for lazy loading)
     cost_coordinator = PstrykCostDataUpdateCoordinator(
         hass,
         api_client,
@@ -139,8 +129,6 @@ async def async_setup_entry(
     cost_coordinator.last_update_success = False
     coordinators.append((cost_coordinator, "cost", cost_key))
 
-    # Initialize ONLY price coordinators immediately (fast startup)
-    # Cost coordinator will be loaded lazily in background
     _LOGGER.info("Starting quick initialization - loading price coordinators only")
 
     async def safe_initial_fetch(coord, coord_type):
@@ -156,7 +144,6 @@ async def async_setup_entry(
             coord.last_update_success = False
             return err
 
-    # Load only price coordinators immediately for fast startup
     price_coordinators = [(c, t, k) for c, t, k in coordinators if t in ("buy", "sell")]
 
     initial_refresh_tasks = [
@@ -166,76 +153,60 @@ async def async_setup_entry(
 
     refresh_results = await asyncio.gather(*initial_refresh_tasks, return_exceptions=True)
 
-    # Check results for price coordinators
     for i, (coordinator, coordinator_type, key) in enumerate(price_coordinators):
         if isinstance(refresh_results[i], Exception):
             _LOGGER.error("Failed to initialize %s coordinator: %s",
                          coordinator_type, str(refresh_results[i]))
     
-    # Store all coordinators and set up scheduling
     buy_coord = None
     sell_coord = None
 
     for coordinator, coordinator_type, key in coordinators:
-        # Store coordinator
         hass.data[DOMAIN][key] = coordinator
 
-        # Schedule updates for price coordinators
         if coordinator_type in ("buy", "sell"):
             coordinator.schedule_hourly_update()
             coordinator.schedule_midnight_update()
 
-            # Schedule afternoon update if 48h mode is enabled
             if mqtt_48h_mode:
                 coordinator.schedule_afternoon_update()
 
-            # Create ONLY current price sensors (fast, immediate)
             top = buy_top if coordinator_type == "buy" else sell_top
             worst = buy_worst if coordinator_type == "buy" else sell_worst
             entities.append(PstrykPriceSensor(coordinator, coordinator_type, top, worst, entry.entry_id))
 
-            # Store coordinator references for later use
             if coordinator_type == "buy":
                 buy_coord = coordinator
             elif coordinator_type == "sell":
                 sell_coord = coordinator
 
-        # Schedule updates for cost coordinator
         elif coordinator_type == "cost":
             coordinator.schedule_hourly_update()
             coordinator.schedule_midnight_update()
 
-    # Create remaining sensors (average price + financial balance) - they will show as unavailable initially
     remaining_entities = []
 
-    # Create average price sensors for buy
     if buy_coord:
         for period in ("daily", "monthly", "yearly"):
             remaining_entities.append(PstrykAveragePriceSensor(
                 cost_coordinator, buy_coord, period, entry.entry_id
             ))
 
-    # Create average price sensors for sell
     if sell_coord:
         for period in ("daily", "monthly", "yearly"):
             remaining_entities.append(PstrykAveragePriceSensor(
                 cost_coordinator, sell_coord, period, entry.entry_id
             ))
 
-    # Create financial balance sensors
     for period in ("daily", "monthly", "yearly"):
         remaining_entities.append(PstrykFinancialBalanceSensor(
             cost_coordinator, period, entry.entry_id
         ))
 
-    # Register ALL sensors immediately:
-    # - Current price sensors (2) with data
-    # - Remaining sensors (15) as unavailable until cost coordinator loads
     _LOGGER.info("Registering %d current price sensors with data and %d additional sensors as unavailable",
                  len(entities), len(remaining_entities))
     async_add_entities(entities + remaining_entities)
 
-    # Load cost coordinator data in background - sensors will automatically update when data arrives
     async def lazy_load_cost_data():
         """Load cost coordinator data in background - sensors update automatically via coordinator."""
         _LOGGER.info("Waiting 15 seconds before loading cost coordinator data")
@@ -243,11 +214,9 @@ async def async_setup_entry(
 
         _LOGGER.info("Loading cost coordinator data in background")
         try:
-            # Load cost coordinator with all resolutions
             data = await cost_coordinator._async_update_data(fetch_all=True)
             cost_coordinator.data = data
             cost_coordinator.last_update_success = True
-            # Notify all listening sensors that data is available
             cost_coordinator.async_update_listeners()
             _LOGGER.info("Cost coordinator loaded successfully - %d sensors updated",
                         len(remaining_entities))
@@ -257,7 +226,6 @@ async def async_setup_entry(
             cost_coordinator.last_update_success = False
             cost_coordinator.data = None
 
-    # Start background data loading
     hass.async_create_task(lazy_load_cost_data())
 
 
@@ -313,7 +281,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
                 if not price_datetime:
                     continue
                     
-                # Konwersja do UTC dla porównania
                 price_datetime_utc = dt_util.as_utc(price_datetime)
                 price_end_utc = price_datetime_utc + timedelta(hours=1)
                 
@@ -329,11 +296,8 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         if self.coordinator.data is None:
             return None
 
-        # Get current price based on actual time - NO FALLBACK to old data!
         current_price = self._get_current_price()
 
-        # If we can't find current price, sensor should be unavailable (return None)
-        # This prevents automations from running with wrong/old prices
         return current_price
 
     @property
@@ -348,17 +312,14 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         now = dt_util.as_local(dt_util.utcnow())
         next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
         
-        # Use translations for debug messages
         debug_msg = _TRANSLATIONS_CACHE.get(
             "debug.looking_for_next_hour", 
             "Looking for price for next hour: {next_hour}"
         ).format(next_hour=next_hour.strftime("%Y-%m-%d %H:%M:%S"))
         _LOGGER.debug(debug_msg)
         
-        # Check if we're looking for the next day's hour (midnight)
         is_looking_for_next_day = next_hour.day != now.day
         
-        # First check in prices_today
         price_found = None
         if self.coordinator.data.get("prices_today"):
             for price_data in self.coordinator.data.get("prices_today", []):
@@ -383,7 +344,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
                     ).format(error=str(e))
                     _LOGGER.error(error_msg)
         
-        # Always check the full list as a fallback, regardless of day
         if self.coordinator.data.get("prices"):
             _LOGGER.debug("Looking for price in full 48h list as fallback")
             
@@ -398,7 +358,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
                         
                     price_datetime = dt_util.as_local(price_datetime)
                     
-                    # Check if this matches the hour and day we're looking for
                     if price_datetime.hour == next_hour.hour and price_datetime.day == next_hour.day:
                         price_found = price_data.get("price")
                         _LOGGER.debug("Found price for %s in full 48h list: %s", next_hour.strftime("%Y-%m-%d %H:%M:%S"), price_found)
@@ -410,7 +369,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
                     ).format(error=str(e))
                     _LOGGER.error(full_list_error_msg)
         
-        # If no price found for next hour
         if is_looking_for_next_day:
             midnight_msg = _TRANSLATIONS_CACHE.get(
                 "debug.no_price_midnight", 
@@ -428,20 +386,17 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
     
     def _get_cached_sorted_prices(self, today):
         """Get cached sorted prices or compute if data changed."""
-        # Create a simple hash of the data to detect changes
         data_hash = hash(tuple((p["start"], p["price"]) for p in today))
         
         if self._last_data_hash != data_hash or self._cached_sorted_prices is None:
             _LOGGER.debug("Price data changed, recalculating sorted prices")
             
-            # Sortowanie dla najlepszych cen
             sorted_best = sorted(
                 today,
                 key=lambda x: x["price"],
                 reverse=(self.price_type == "sell"),
             )
             
-            # Sortowanie dla najgorszych cen (odwrotna kolejność sortowania)
             sorted_worst = sorted(
                 today,
                 key=lambda x: x["price"],
@@ -467,24 +422,20 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         if not prices_for_day:
             return True
             
-        # Get all price values
         price_values = [p.get("price") for p in prices_for_day if p.get("price") is not None]
         
         if not price_values:
             return True
         
-        # If we have less than 20 prices for a day, it's incomplete data
         if len(price_values) < 20:
             _LOGGER.debug(f"Only {len(price_values)} prices for the day, likely incomplete data")
             return True
             
-        # Check if ALL values are identical
         unique_values = set(price_values)
         if len(unique_values) == 1:
             _LOGGER.debug(f"All {len(price_values)} prices have the same value ({price_values[0]}), likely placeholders")
             return True
         
-        # Additional check: if more than 90% of values are the same, it's suspicious
         most_common_value = max(set(price_values), key=price_values.count)
         count_most_common = price_values.count(most_common_value)
         if count_most_common / len(price_values) > 0.9:
@@ -498,7 +449,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         if not prices:
             return 0
             
-        # Sort by time to ensure consecutive checking
         sorted_prices = sorted(prices, key=lambda x: x.get("start", ""))
         
         max_consecutive = 1
@@ -523,26 +473,20 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
             return 0
             
         if not self.coordinator.mqtt_48h_mode:
-            # If not in 48h mode, we only publish today's prices
             prices_today = self.coordinator.data.get("prices_today", [])
             return len(prices_today)
         else:
-            # In 48h mode, we need to count valid prices
             all_prices = self.coordinator.data.get("prices", [])
             
-            # Just count today's prices as they're always valid
             now = dt_util.as_local(dt_util.utcnow())
             today_str = now.strftime("%Y-%m-%d")
             today_prices = [p for p in all_prices if p.get("start", "").startswith(today_str)]
             
-            # For tomorrow, check if data looks valid
             tomorrow_str = (now + timedelta(days=1)).strftime("%Y-%m-%d")
             tomorrow_prices = [p for p in all_prices if p.get("start", "").startswith(tomorrow_str)]
             
-            # Count today's prices always
             valid_count = len(today_prices)
             
-            # Add tomorrow's prices only if they look like real data
             if tomorrow_prices and not self._is_likely_placeholder_data(tomorrow_prices):
                 valid_count += len(tomorrow_prices)
             
@@ -553,13 +497,11 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         if not today_prices:
             return None
             
-        # Get sun entity
         sun_entity = self.hass.states.get("sun.sun")
         if not sun_entity:
             _LOGGER.debug("Sun entity not available")
             return None
             
-        # Get sunrise and sunset times from attributes
         sunrise_attr = sun_entity.attributes.get("next_rising")
         sunset_attr = sun_entity.attributes.get("next_setting")
         
@@ -567,7 +509,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
             _LOGGER.debug("Sunrise/sunset times not available")
             return None
             
-        # Parse sunrise and sunset times
         try:
             sunrise = dt_util.parse_datetime(sunrise_attr)
             sunset = dt_util.parse_datetime(sunset_attr)
@@ -575,24 +516,18 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
             if not sunrise or not sunset:
                 return None
                 
-            # Convert to local time
             sunrise_local = dt_util.as_local(sunrise)
             sunset_local = dt_util.as_local(sunset)
             
-            # If sunrise is tomorrow, use today's sunrise from calculation
             now = dt_util.now()
             if sunrise_local.date() > now.date():
-                # Calculate approximate sunrise for today (subtract 24h)
                 sunrise_local = sunrise_local - timedelta(days=1)
                 
-            # If sunset is tomorrow, we're after sunset today
             if sunset_local.date() > now.date():
-                # Use previous sunset
                 sunset_local = sunset_local - timedelta(days=1)
                 
             _LOGGER.debug(f"Calculating s/s average between {sunrise_local.strftime('%H:%M')} and {sunset_local.strftime('%H:%M')}")
             
-            # Get prices between sunrise and sunset
             sunrise_sunset_prices = []
             
             for price_entry in today_prices:
@@ -605,14 +540,11 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
                     
                 price_time_local = dt_util.as_local(price_time)
                 
-                # Check if price hour is between sunrise and sunset
-                # We check the start of the hour
                 if sunrise_local <= price_time_local < sunset_local:
                     price_value = price_entry.get("price")
                     if price_value is not None:
                         sunrise_sunset_prices.append(price_value)
                         
-            # Calculate average
             if sunrise_sunset_prices:
                 avg = round(sum(sunrise_sunset_prices) / len(sunrise_sunset_prices), 2)
                 _LOGGER.debug(f"S/S average calculated from {len(sunrise_sunset_prices)} hours: {avg}")
@@ -630,7 +562,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         """Include the price table attributes in the current price sensor."""
         now = dt_util.as_local(dt_util.utcnow())
         
-        # Get translated attribute names from cache
         next_hour_key = _TRANSLATIONS_CACHE.get(
             "entity.sensor.next_hour", 
             "Next hour"
@@ -701,7 +632,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
             "MQTT price count"
         )
         
-        # Add sunrise/sunset average key
         avg_price_sunrise_sunset_key = _TRANSLATIONS_CACHE.get(
             "entity.sensor.avg_price_sunrise_sunset",
             "Average price today s/s"
@@ -728,19 +658,16 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         today = self.coordinator.data.get("prices_today", [])
         is_cached = self.coordinator.data.get("is_cached", False)
         
-        # Calculate average price for remaining hours today (from current hour)
         avg_price_remaining = None
         remaining_hours_count = 0
         avg_price_full_day = None
         
         if today:
-            # Full day average (all 24 hours)
             total_price_full = sum(p.get("price", 0) for p in today if p.get("price") is not None)
             valid_prices_count_full = sum(1 for p in today if p.get("price") is not None)
             if valid_prices_count_full > 0:
                 avg_price_full_day = round(total_price_full / valid_prices_count_full, 2)
             
-            # Remaining hours average (from current hour onwards)
             current_hour = now.strftime("%Y-%m-%dT%H:")
             remaining_prices = []
             
@@ -752,23 +679,18 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
             if remaining_hours_count > 0:
                 avg_price_remaining = round(sum(remaining_prices) / remaining_hours_count, 2)
         
-        # Calculate sunrise to sunset average
         avg_price_sunrise_sunset = self._get_sunrise_sunset_average(today)
         
-        # Create keys with hour count in user's preferred format
         avg_price_remaining_with_hours = f"{avg_price_key} /{remaining_hours_count}"
         avg_price_full_day_with_hours = f"{avg_price_key} /24"
         
-        # Check if tomorrow's prices are available (more robust check)
         all_prices = self.coordinator.data.get("prices", [])
         tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
         tomorrow_prices = []
         
-        # Only check for tomorrow prices if we have a reasonable amount of data
         if len(all_prices) > 0:
             tomorrow_prices = [p for p in all_prices if p.get("start", "").startswith(tomorrow)]
         
-        # Log what we found for debugging
         if tomorrow_prices:
             unique_values = set(p.get("price") for p in tomorrow_prices if p.get("price") is not None)
             consecutive = self._count_consecutive_same_values(tomorrow_prices)
@@ -778,18 +700,13 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
                 f"max {consecutive} consecutive same values"
             )
         
-        # Tomorrow is available only if:
-        # 1. We have at least 20 hours of data for tomorrow
-        # 2. The data doesn't look like placeholders
         tomorrow_available = (
             len(tomorrow_prices) >= 20 and 
             not self._is_likely_placeholder_data(tomorrow_prices)
         )
         
-        # Get cached sorted prices
         sorted_prices = self._get_cached_sorted_prices(today) if today else {"best": [], "worst": []}
         
-        # Get actual MQTT price count
         mqtt_price_count = self._get_mqtt_price_count()
         
         return {
@@ -827,7 +744,7 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
         self.cost_coordinator = cost_coordinator
         self.price_coordinator = price_coordinator
         self.price_type = price_coordinator.price_type
-        self.period = period  # 'daily', 'monthly' or 'yearly'
+        self.period = period
         self.entry_id = entry_id
         self._attr_device_class = SensorDeviceClass.MONETARY
         self._state = None
@@ -840,18 +757,15 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
         """Restore state when entity is added."""
         await super().async_added_to_hass()
         
-        # Subscribe to cost coordinator updates
         self.async_on_remove(
             self.cost_coordinator.async_add_listener(self._handle_cost_update)
         )
         
-        # Restore previous state
         last_state = await self.async_get_last_state()
         if last_state and last_state.state not in (None, "unknown", "unavailable"):
             try:
                 self._state = float(last_state.state)
                 
-                # Restore attributes
                 if last_state.attributes:
                     self._energy_bought = float(last_state.attributes.get("energy_bought", 0))
                     self._energy_sold = float(last_state.attributes.get("energy_sold", 0))
@@ -930,7 +844,6 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
             calculation_method_key: "Weighted average",
         }
         
-        # Add energy and cost data if available
         if self.price_type == "buy" and self._energy_bought > 0:
             attrs[energy_bought_key] = round(self._energy_bought, 2)
             attrs[total_cost_key] = round(self._total_cost, 2)
@@ -938,7 +851,6 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
             attrs[energy_sold_key] = round(self._energy_sold, 2)
             attrs[total_revenue_key] = round(self._total_revenue, 2)
             
-        # Add last updated at the bottom
         last_updated_key = _TRANSLATIONS_CACHE.get(
             "entity.sensor.last_updated", 
             "Last updated"
@@ -958,11 +870,9 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
         if not period_data:
             return
             
-        # Calculate weighted average based on actual costs and usage
         if self.price_type == "buy":
-            # For buy price: total cost / total energy bought
-            total_cost = abs(period_data.get("total_cost", 0))  # Already calculated in coordinator
-            energy_bought = period_data.get("fae_usage", 0)  # kWh from usage API
+            total_cost = abs(period_data.get("total_cost", 0))
+            energy_bought = period_data.get("fae_usage", 0)
             
             if energy_bought > 0:
                 self._state = round(total_cost / energy_bought, 4)
@@ -972,9 +882,8 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
                 self._state = None
                 
         elif self.price_type == "sell":
-            # For sell price: total revenue / total energy sold
             total_revenue = period_data.get("total_sold", 0)
-            energy_sold = period_data.get("rae_usage", 0)  # kWh from usage API
+            energy_sold = period_data.get("rae_usage", 0)
             
             if energy_sold > 0:
                 self._state = round(total_revenue / energy_sold, 4)
@@ -1002,7 +911,7 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
                  period: str, entry_id: str):
         """Initialize the financial balance sensor."""
         super().__init__(coordinator)
-        self.period = period  # 'daily', 'monthly', or 'yearly'
+        self.period = period
         self.entry_id = entry_id
         
     @property
@@ -1044,10 +953,8 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
         if not period_data or "total_balance" not in period_data:
             return None
             
-        # Get the balance value from API
         balance = period_data.get("total_balance")
         
-        # Return exact value from API without rounding
         return balance
         
     @property
@@ -1061,9 +968,9 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
         if self.native_value is None:
             return "mdi:currency-usd-off"
         elif self.native_value < 0:
-            return "mdi:cash-minus"  # We're paying
+            return "mdi:cash-minus"
         elif self.native_value > 0:
-            return "mdi:cash-plus"   # We're earning
+            return "mdi:cash-plus"
         else:
             return "mdi:cash"
             
@@ -1076,7 +983,6 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
         period_data = self.coordinator.data.get(self.period)
         frame = period_data.get("frame", {})
         
-        # Get translated attribute names
         buy_cost_key = _TRANSLATIONS_CACHE.get(
             "entity.sensor.buy_cost",
             "Buy cost"
@@ -1126,9 +1032,7 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
             energy_sold_key: period_data.get("rae_usage", 0),
         }
         
-        # Add detailed cost breakdown if available
         if frame:
-            # Konwertuj daty UTC na lokalne
             start_utc = frame.get("start")
             end_utc = frame.get("end")
             
@@ -1144,7 +1048,6 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
                 "end": end_local.strftime("%Y-%m-%d") if end_local else None,
             })
             
-        # Add last updated at the bottom
         last_updated_key = _TRANSLATIONS_CACHE.get(
             "entity.sensor.last_updated", 
             "Last updated"
