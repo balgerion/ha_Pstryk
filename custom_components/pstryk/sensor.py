@@ -598,6 +598,7 @@ class PstrykJsonPriceSensor(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
         self.price_type = price_type
         self.entry_id = entry_id
+        self.entity_id = f"sensor.{DOMAIN}_json_{price_type}"
 
     @property
     def name(self) -> str:
