@@ -51,7 +51,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.error("MQTT integration is not enabled. Cannot setup EVCC bridge.")
             try:
                 translations = await async_get_translations(
-                    hass, hass.config.language, DOMAIN, ["mqtt"]
+                    hass, hass.config.language, "mqtt", [DOMAIN]
                 )
             except Exception as ex:
                 _LOGGER.warning("Failed to load translations for MQTT notification: %s", ex)
