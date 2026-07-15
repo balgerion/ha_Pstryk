@@ -18,13 +18,15 @@
           "buy_top": "Liczba najlepszych cen zakupu",
           "sell_top": "Liczba najlepszych cen sprzedaży",
           "buy_worst": "Liczba najgorszych cen zakupu",
-          "sell_worst": "Liczba najgorszych cen sprzedaży"
+          "sell_worst": "Liczba najgorszych cen sprzedaży",
+          "json_sensor_enabled": "Włącz sensory JSON z cenami"
         },
         "data_description": {
           "buy_top": "Godziny z najtańszymi cenami zakupu do wyróżnienia (1-24)",
           "sell_top": "Godziny z najwyższymi cenami sprzedaży do wyróżnienia (1-24)",
           "buy_worst": "Godziny z najdroższymi cenami zakupu do wyróżnienia (1-24)",
-          "sell_worst": "Godziny z najniższymi cenami sprzedaży do wyróżnienia (1-24)"
+          "sell_worst": "Godziny z najniższymi cenami sprzedaży do wyróżnienia (1-24)",
+          "json_sensor_enabled": "Dodaje sensory Pstryk Json Buy/Sell ze standardowymi atrybutami prices_today, prices_tomorrow i prices (kompatybilne z EV Smart Charging, cheapest-energy-hours itp.)"
         }
       },
       "mqtt_settings": {
