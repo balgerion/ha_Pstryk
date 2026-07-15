@@ -181,7 +181,9 @@
   "mqtt": {
     "publishing_success": "Successfully published {count} prices to MQTT topic {topic}",
     "publishing_error": "Error publishing to MQTT: {error}",
-    "mqtt_disabled": "MQTT integration is not enabled"
+    "mqtt_disabled": "MQTT integration is not enabled",
+    "mqtt_not_configured_title": "Pstryk Energy MQTT Error",
+    "mqtt_not_configured_message": "MQTT integration is not enabled. EVCC MQTT Bridge for Pstryk Energy cannot function. Please configure MQTT integration in Home Assistant."
   },
   "debug": {
     "looking_for_next_hour": "Looking for price for next hour: {next_hour}",
