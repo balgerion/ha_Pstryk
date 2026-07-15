@@ -3,8 +3,6 @@ import voluptuous as vol
 import asyncio
 from datetime import timedelta
 from homeassistant.util import dt as dt_util
-from homeassistant.core import callback
-from homeassistant.components import mqtt
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .const import (
