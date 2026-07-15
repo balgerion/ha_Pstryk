@@ -1,4 +1,3 @@
-"""Shared API client for Pstryk Energy integration with caching and rate limiting."""
 import logging
 import asyncio
 import random
@@ -18,10 +17,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class PstrykAPIClient:
-    """Shared API client with caching, rate limiting, and proper error handling."""
 
     def __init__(self, hass: HomeAssistant, api_key: str):
-        """Initialize the API client."""
         self.hass = hass
         self.api_key = api_key
         self._session: Optional[aiohttp.ClientSession] = None
@@ -38,13 +35,11 @@ class PstrykAPIClient:
 
     @property
     def session(self) -> aiohttp.ClientSession:
-        """Get or create aiohttp session."""
         if self._session is None:
             self._session = async_get_clientsession(self.hass)
         return self._session
 
     async def _load_translations(self):
-        """Load translations for error messages."""
         if not self._translations_loaded:
             try:
                 self._translations = await async_get_translations(
@@ -61,7 +56,6 @@ class PstrykAPIClient:
                 self._translations_loaded = True
 
     def _t(self, key: str, **kwargs) -> str:
-        """Get translated string with fallback."""
         possible_keys = [
             f"component.{DOMAIN}.debug.{key}",
             f"{DOMAIN}.debug.{key}",
@@ -93,13 +87,11 @@ class PstrykAPIClient:
             return template
 
     def _get_endpoint_key(self, url: str) -> str:
-        """Extract endpoint key from URL for rate limiting."""
         if "meter-data/unified-metrics" in url:
             return "unified-metrics"
         return "unknown"
 
     async def _check_rate_limit(self, endpoint_key: str) -> Optional[float]:
-        """Check if we're rate limited and return wait time if needed."""
         async with self._rate_limit_lock:
             if endpoint_key in self._rate_limits:
                 limit_info = self._rate_limits[endpoint_key]
@@ -114,13 +106,11 @@ class PstrykAPIClient:
         return None
 
     def _calculate_backoff(self, attempt: int, base_delay: float = 20.0) -> float:
-        """Calculate exponential backoff with jitter."""
         backoff = base_delay * (2 ** attempt)
         jitter = backoff * 0.2 * (2 * random.random() - 1)
         return max(1.0, backoff + jitter)
 
     async def _handle_rate_limit(self, response: aiohttp.ClientResponse, endpoint_key: str):
-        """Handle 429 rate limit response."""
         await self._load_translations()
 
         retry_after_header = response.headers.get("Retry-After")
@@ -158,7 +148,6 @@ class PstrykAPIClient:
         max_retries: int = 3,
         base_delay: float = 20.0
     ) -> Dict[str, Any]:
-        """Make API request with retries, rate limiting, and deduplication."""
         await self._load_translations()
 
         endpoint_key = self._get_endpoint_key(url)
@@ -308,7 +297,6 @@ class PstrykAPIClient:
         max_retries: int = 3,
         base_delay: float = 20.0
     ) -> Dict[str, Any]:
-        """Fetch data with deduplication of concurrent requests."""
         async with self._in_flight_lock:
             if url in self._in_flight:
                 _LOGGER.debug("Deduplicating request for %s", url)
