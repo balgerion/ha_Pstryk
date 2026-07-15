@@ -1,0 +1,219 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "API Configuration",
+        "description": "Connect to Pstryk Energy service",
+        "data": {
+          "api_key": "API Key"
+        },
+        "data_description": {
+          "api_key": "Your Pstryk Energy API key for authentication"
+        }
+      },
+      "price_settings": {
+        "title": "Price Monitoring",
+        "description": "Configure how many hours of best and worst prices to track",
+        "data": {
+          "buy_top": "Number of best buy prices",
+          "sell_top": "Number of best sell prices",
+          "buy_worst": "Number of worst buy prices",
+          "sell_worst": "Number of worst sell prices"
+        },
+        "data_description": {
+          "buy_top": "Hours with cheapest buy prices to highlight (1-24)",
+          "sell_top": "Hours with highest sell prices to highlight (1-24)",
+          "buy_worst": "Hours with most expensive buy prices to highlight (1-24)",
+          "sell_worst": "Hours with lowest sell prices to highlight (1-24)"
+        }
+      },
+      "mqtt_settings": {
+        "title": "MQTT Bridge",
+        "description": "Configure MQTT integration for external systems",
+        "data": {
+          "mqtt_enabled": "Enable MQTT Bridge",
+          "mqtt_topic_buy": "MQTT Topic for Buy Prices",
+          "mqtt_topic_sell": "MQTT Topic for Sell Prices",
+          "mqtt_48h_mode": "Enable 48h mode"
+        },
+        "data_description": {
+          "mqtt_enabled": "Publish prices to MQTT for external systems like EVCC",
+          "mqtt_topic_buy": "MQTT topic where buy prices will be published",
+          "mqtt_topic_sell": "MQTT topic where sell prices will be published",
+          "mqtt_48h_mode": "Publish 48 hours of prices (today + tomorrow)"
+        }
+      },
+      "api_retry": {
+        "title": "API Reliability",
+        "description": "Configure retry behavior for API failures",
+        "data": {
+          "retry_attempts": "Retry attempts",
+          "retry_delay": "Retry delay (seconds)"
+        },
+        "data_description": {
+          "retry_attempts": "Number of times to retry failed API requests",
+          "retry_delay": "Wait time between retry attempts"
+        }
+      }
+    },
+    "error": {
+      "invalid_api_key": "Invalid API key",
+      "mqtt_not_configured": "MQTT integration not configured or not working. Please configure the MQTT integration in Home Assistant before enabling EVCC MQTT Bridge."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Pstryk Energy Options",
+        "description": "Configure your Pstryk Energy integration",
+        "data": {
+          "buy_top": "Number of best buy prices",
+          "sell_top": "Number of best sell prices",
+          "buy_worst": "Number of worst buy prices",
+          "sell_worst": "Number of worst sell prices",
+          "mqtt_enabled": "Enable MQTT Bridge",
+          "mqtt_topic_buy": "MQTT Topic for Buy Prices",
+          "mqtt_topic_sell": "MQTT Topic for Sell Prices",
+          "mqtt_48h_mode": "Enable 48h mode for MQTT",
+          "retry_attempts": "API retry attempts",
+          "retry_delay": "API retry delay (seconds)"
+        },
+        "data_description": {
+          "buy_top": "How many cheapest buy prices to highlight (1-24 hours)",
+          "sell_top": "How many highest sell prices to highlight (1-24 hours)",
+          "buy_worst": "How many most expensive buy prices to highlight (1-24 hours)",
+          "sell_worst": "How many lowest sell prices to highlight (1-24 hours)",
+          "mqtt_enabled": "Enable publishing prices to MQTT for external systems like EVCC",
+          "mqtt_topic_buy": "MQTT topic where buy prices will be published",
+          "mqtt_topic_sell": "MQTT topic where sell prices will be published",
+          "mqtt_48h_mode": "Publish 48 hours of prices (today + tomorrow) instead of just today",
+          "retry_attempts": "How many times to retry API requests on failure",
+          "retry_delay": "Wait time between API retry attempts"
+        }
+      },
+      "price_settings": {
+        "title": "Price Monitoring Settings",
+        "description": "Configure how many hours of best and worst prices to track",
+        "data": {
+          "buy_top": "Number of best buy prices",
+          "sell_top": "Number of best sell prices",
+          "buy_worst": "Number of worst buy prices",
+          "sell_worst": "Number of worst sell prices"
+        },
+        "data_description": {
+          "buy_top": "Hours with cheapest buy prices to highlight (1-24)",
+          "sell_top": "Hours with highest sell prices to highlight (1-24)",
+          "buy_worst": "Hours with most expensive buy prices to highlight (1-24)",
+          "sell_worst": "Hours with lowest sell prices to highlight (1-24)"
+        }
+      },
+      "mqtt_settings": {
+        "title": "MQTT Bridge Configuration",
+        "description": "Configure MQTT integration for external systems",
+        "data": {
+          "mqtt_enabled": "Enable MQTT Bridge",
+          "mqtt_topic_buy": "MQTT Topic for Buy Prices",
+          "mqtt_topic_sell": "MQTT Topic for Sell Prices",
+          "mqtt_48h_mode": "Enable 48h mode"
+        },
+        "data_description": {
+          "mqtt_enabled": "Publish prices to MQTT for external systems like EVCC",
+          "mqtt_topic_buy": "MQTT topic where buy prices will be published",
+          "mqtt_topic_sell": "MQTT topic where sell prices will be published",
+          "mqtt_48h_mode": "Publish 48 hours of prices (today + tomorrow)"
+        }
+      },
+      "api_settings": {
+        "title": "API Configuration",
+        "description": "Configure API retry behavior for improved reliability",
+        "data": {
+          "retry_attempts": "API retry attempts",
+          "retry_delay": "API retry delay (seconds)"
+        },
+        "data_description": {
+          "retry_attempts": "How many times to retry API requests on failure",
+          "retry_delay": "Wait time between API retry attempts"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "next_hour": "Next hour",
+      "using_cached_data": "Using cached data",
+      "all_prices": "All prices",
+      "best_prices": "Best prices",
+      "worst_prices": "Worst prices",
+      "best_count": "Best count",
+      "worst_count": "Worst count",
+      "price_count": "Price count",
+      "last_updated": "Last updated",
+      "avg_price": "Average price today",
+      "avg_price_remaining": "Average price (remaining)",
+      "avg_price_full_day": "Average price (full day)",
+      "avg_price_sunrise_sunset": "Average price today s/s",
+      "tomorrow_available": "Tomorrow prices available",
+      "mqtt_price_count": "MQTT price count",
+      "last_reset": "Last reset",
+      "price_sum": "Price sum",
+      "period": "Period",
+      "period_monthly": "Monthly",
+      "period_yearly": "Yearly",
+      "financial_balance": "Financial Balance",
+      "buy_cost": "Buy cost",
+      "sell_revenue": "Sell revenue",
+      "energy_bought": "Energy bought",
+      "energy_sold": "Energy sold",
+      "balance": "Balance",
+      "period_daily": "Daily",
+      "buy_cost": "Buy cost",
+      "distribution_cost": "Distribution cost",
+      "excise": "Excise",
+      "vat": "VAT",
+      "calculation_method": "Calculation method",
+      "total_cost": "Total cost",
+      "total_revenue": "Total revenue",
+      "service_cost": "Service cost",
+      "is_live": "Current period"
+    }
+  },
+  "mqtt": {
+    "publishing_success": "Successfully published {count} prices to MQTT topic {topic}",
+    "publishing_error": "Error publishing to MQTT: {error}",
+    "mqtt_disabled": "MQTT integration is not enabled"
+  },
+  "debug": {
+    "looking_for_next_hour": "Looking for price for next hour: {next_hour}",
+    "looking_for_next_day": "Looking for next day price in full price list (48h)",
+    "error_processing_date": "Error processing date: {error}",
+    "error_processing_full_list": "Error processing date for full list: {error}",
+    "no_price_midnight": "No price found for next day midnight. Data probably not loaded yet.",
+    "no_price_next_hour": "No price found for next hour: {next_hour}",
+    "retry_attempt": "Retry {retry}/{max_retries} after error: {error} (delay: {delay}s)",
+    "timeout_after_retries": "Timeout fetching {price_type} data from API after {retries} retries",
+    "api_timeout_message": "API timeout after {timeout} seconds (tried {retries} times)",
+    "api_error_401": "API authentication failed for {price_type} - invalid API key",
+    "api_error_401_user": "API authentication failed - invalid API key",
+    "api_error_403": "API access forbidden for {price_type} - permissions issue",
+    "api_error_403_user": "API access forbidden - check permissions",
+    "api_error_404": "API endpoint not found for {price_type} - check URL",
+    "api_error_404_user": "API endpoint not found",
+    "api_error_429": "API rate limit exceeded for {price_type}",
+    "api_error_429_user": "API rate limit exceeded - try again later",
+    "api_error_502": "API Gateway error (502) for {price_type} - server may be down",
+    "api_error_502_user": "API Gateway error (502) - server may be down",
+    "api_error_5xx": "API server error ({status}) for {price_type} - server issue",
+    "api_error_5xx_user": "API server error ({status}) - server issue",
+    "api_error_generic": "API error {status} for {price_type}: {error}",
+    "api_error_generic_user": "API error {status}: {error}",
+    "api_error_html": "API error {status} for {endpoint} (HTML error page received)",
+    "network_error": "Network error fetching {price_type} data: {error}",
+    "network_error_user": "Network error: {error}",
+    "unexpected_error": "Unexpected error fetching {price_type} data: {error}",
+    "unexpected_error_user": "Error: {error}",
+    "using_cache": "Using cached data from previous update due to API failure",
+    "rate_limited": "Endpoint '{endpoint}' is rate limited. Will retry after {seconds} seconds",
+    "using_cache_rate_limit": "Using cached data - endpoint rate limited for {seconds} seconds",
+    "waiting_rate_limit": "Waiting {seconds} seconds for rate limit to clear"
+  }
+}
