@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from .const import API_URL, API_TIMEOUT, DOMAIN
+from .const import API_TIMEOUT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -246,21 +246,19 @@ class PstrykAPIClient:
         base_delay: float = 20.0
     ) -> Dict[str, Any]:
         async with self._in_flight_lock:
-            if url in self._in_flight:
+            task = self._in_flight.get(url)
+            created = task is None
+            if created:
+                task = asyncio.create_task(
+                    self._make_request(url, max_retries, base_delay)
+                )
+                self._in_flight[url] = task
+            else:
                 _LOGGER.debug("Deduplicating request for %s", url)
-                try:
-                    return await self._in_flight[url]
-                except Exception:
-                    pass
-
-            task = asyncio.create_task(
-                self._make_request(url, max_retries, base_delay)
-            )
-            self._in_flight[url] = task
 
         try:
-            result = await task
-            return result
+            return await task
         finally:
-            async with self._in_flight_lock:
-                self._in_flight.pop(url, None)
+            if created:
+                async with self._in_flight_lock:
+                    self._in_flight.pop(url, None)
