@@ -14,6 +14,7 @@ from .const import (
     DEFAULT_MQTT_TOPIC_BUY,
     DEFAULT_MQTT_TOPIC_SELL
 )
+from .update_coordinator import is_likely_placeholder_data
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,32 +54,6 @@ class PstrykMqttPublisher:
         self._initialized = True
         return True
     
-    def _is_day_data_valid(self, day_prices):
-        """Check if prices for a specific day look like real data.
-        
-        Returns False if the data appears to be placeholders.
-        """
-        if not day_prices:
-            return False
-            
-        price_values = [p.get("price") for p in day_prices if p.get("price") is not None]
-        
-        if not price_values:
-            return False
-            
-        if len(price_values) < 20:
-            return False
-            
-        unique_values = set(price_values)
-        if len(unique_values) == 1:
-            return False
-            
-        most_common = max(set(price_values), key=price_values.count)
-        if price_values.count(most_common) / len(price_values) > 0.9:
-            return False
-            
-        return True
-
     def _format_prices_for_evcc(self, prices_data, price_type):
         """Format prices in EVCC expected format.
         
@@ -133,7 +108,7 @@ class PstrykMqttPublisher:
             
             if tomorrow_date in prices_by_date:
                 tomorrow_prices = prices_by_date[tomorrow_date]
-                if self._is_day_data_valid(tomorrow_prices):
+                if not is_likely_placeholder_data(tomorrow_prices):
                     days_to_include.append(tomorrow_date)
                     _LOGGER.info(f"Including {len(tomorrow_prices)} tomorrow prices in MQTT publish")
                 else:
