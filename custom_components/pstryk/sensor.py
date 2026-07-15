@@ -14,6 +14,7 @@ from .api_client import PstrykAPIClient
 from .const import (
     DOMAIN,
     CONF_MQTT_48H_MODE,
+    CONF_JSON_SENSOR,
     CONF_RETRY_ATTEMPTS,
     CONF_RETRY_DELAY,
     DEFAULT_RETRY_ATTEMPTS,
@@ -59,6 +60,7 @@ async def async_setup_entry(
     buy_worst = entry.options.get("buy_worst", entry.data.get("buy_worst", 5))
     sell_worst = entry.options.get("sell_worst", entry.data.get("sell_worst", 5))
     mqtt_48h_mode = entry.options.get(CONF_MQTT_48H_MODE, False)
+    json_sensor_enabled = entry.options.get(CONF_JSON_SENSOR, False)
     retry_attempts = entry.options.get(CONF_RETRY_ATTEMPTS, DEFAULT_RETRY_ATTEMPTS)
     retry_delay = entry.options.get(CONF_RETRY_DELAY, DEFAULT_RETRY_DELAY)
 
@@ -174,6 +176,9 @@ async def async_setup_entry(
             top = buy_top if coordinator_type == "buy" else sell_top
             worst = buy_worst if coordinator_type == "buy" else sell_worst
             entities.append(PstrykPriceSensor(coordinator, coordinator_type, top, worst, entry.entry_id))
+
+            if json_sensor_enabled:
+                entities.append(PstrykJsonPriceSensor(coordinator, coordinator_type, entry.entry_id))
 
             if coordinator_type == "buy":
                 buy_coord = coordinator
@@ -729,6 +734,77 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
     @property
     def available(self) -> bool:
         """Return if entity is available."""
+        return self.coordinator.last_update_success and self.coordinator.data is not None
+
+
+class PstrykJsonPriceSensor(CoordinatorEntity, SensorEntity):
+    """Standardized price table sensor (TGE/Nordpool-compatible attribute format)."""
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:code-json"
+
+    def __init__(self, coordinator: PstrykDataUpdateCoordinator, price_type: str, entry_id: str):
+        super().__init__(coordinator)
+        self.price_type = price_type
+        self.entry_id = entry_id
+
+    @property
+    def name(self) -> str:
+        return f"Pstryk Json {self.price_type.title()}"
+
+    @property
+    def unique_id(self) -> str:
+        return f"{DOMAIN}_{self.price_type}_json"
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, "pstryk_energy")},
+            "name": "Pstryk Energy",
+            "manufacturer": "Pstryk",
+            "model": "Energy Price Monitor",
+            "sw_version": get_integration_version(self.hass),
+        }
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        return "PLN/kWh"
+
+    def _price_entries(self):
+        data = self.coordinator.data or {}
+        entries = []
+        for p in data.get("prices", []):
+            if p.get("price") is None:
+                continue
+            t = dt_util.parse_datetime(p.get("start", ""))
+            if t is None:
+                continue
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+            entries.append({"time": t, "price": p["price"]})
+        entries.sort(key=lambda e: e["time"])
+        return entries
+
+    @property
+    def native_value(self):
+        now = dt_util.now()
+        for e in self._price_entries():
+            if e["time"] <= now < e["time"] + timedelta(hours=1):
+                return e["price"]
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        entries = self._price_entries()
+        today = dt_util.now().date()
+        tomorrow = today + timedelta(days=1)
+        return {
+            "prices_today": [e for e in entries if e["time"].date() == today],
+            "prices_tomorrow": [e for e in entries if e["time"].date() == tomorrow],
+            "prices": entries,
+        }
+
+    @property
+    def available(self) -> bool:
         return self.coordinator.last_update_success and self.coordinator.data is not None
 
 
