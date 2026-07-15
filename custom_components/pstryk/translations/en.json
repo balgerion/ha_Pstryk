@@ -76,7 +76,8 @@
           "mqtt_topic_sell": "MQTT Topic for Sell Prices",
           "mqtt_48h_mode": "Enable 48h mode for MQTT",
           "retry_attempts": "API retry attempts",
-          "retry_delay": "API retry delay (seconds)"
+          "retry_delay": "API retry delay (seconds)",
+          "json_sensor_enabled": "Enable JSON price sensors"
         },
         "data_description": {
           "buy_top": "How many cheapest buy prices to highlight (1-24 hours)",
@@ -88,7 +89,8 @@
           "mqtt_topic_sell": "MQTT topic where sell prices will be published",
           "mqtt_48h_mode": "Publish 48 hours of prices (today + tomorrow) instead of just today",
           "retry_attempts": "How many times to retry API requests on failure",
-          "retry_delay": "Wait time between API retry attempts"
+          "retry_delay": "Wait time between API retry attempts",
+          "json_sensor_enabled": "Adds Pstryk Json Buy/Sell sensors with standardized prices_today, prices_tomorrow and prices attributes (compatible with EV Smart Charging, cheapest-energy-hours etc.)"
         }
       },
       "price_settings": {
@@ -166,7 +168,6 @@
       "energy_sold": "Energy sold",
       "balance": "Balance",
       "period_daily": "Daily",
-      "buy_cost": "Buy cost",
       "distribution_cost": "Distribution cost",
       "excise": "Excise",
       "vat": "VAT",
