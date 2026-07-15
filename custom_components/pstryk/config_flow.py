@@ -19,6 +19,7 @@ from .const import (
     CONF_MQTT_TOPIC_BUY,
     CONF_MQTT_TOPIC_SELL,
     CONF_MQTT_48H_MODE,
+    CONF_JSON_SENSOR,
     CONF_RETRY_ATTEMPTS,
     CONF_RETRY_DELAY,
     DEFAULT_RETRY_ATTEMPTS,
@@ -222,8 +223,10 @@ class PstrykOptionsFlowHandler(config_entries.OptionsFlow):
             vol.Required("sell_worst", default=self.config_entry.options.get(
                 "sell_worst", self.config_entry.data.get("sell_worst", 5))): 
                     vol.All(vol.Coerce(int), vol.Range(min=1, max=24)),
+            vol.Required(CONF_JSON_SENSOR, default=self.config_entry.options.get(
+                CONF_JSON_SENSOR, False)): bool,
         }
-        
+
         if mqtt_enabled:
             schema.update({
                 vol.Required(CONF_MQTT_ENABLED, default=self.config_entry.options.get(
