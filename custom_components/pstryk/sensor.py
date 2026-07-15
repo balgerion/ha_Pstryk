@@ -239,7 +239,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         self.top_count = top_count
         self.worst_count = worst_count
         self.entry_id = entry_id
-        self._attr_device_class = SensorDeviceClass.MONETARY
         self._cached_sorted_prices = None
         self._last_data_hash = None
         
@@ -746,7 +745,6 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
         self.price_type = price_coordinator.price_type
         self.period = period
         self.entry_id = entry_id
-        self._attr_device_class = SensorDeviceClass.MONETARY
         self._state = None
         self._energy_bought = 0.0
         self._energy_sold = 0.0
