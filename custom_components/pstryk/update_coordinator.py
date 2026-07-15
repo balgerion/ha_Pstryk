@@ -7,7 +7,6 @@ from typing import Any
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.util import dt as dt_util
-from homeassistant.helpers.translation import async_get_translations
 from .const import (
     API_URL,
     PRICING_ENDPOINT,
@@ -61,7 +60,6 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         self._unsub_hourly = None
         self._unsub_midnight = None
         self._unsub_afternoon = None
-        self._translations = {}
         self._had_tomorrow_prices = False
 
         integration_path = os.path.dirname(os.path.abspath(__file__))
@@ -195,13 +193,6 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         _LOGGER.debug("Requesting %s data from %s", self.price_type, url)
 
         try:
-            try:
-                self._translations = await async_get_translations(
-                    self.hass, self.hass.config.language, DOMAIN, ["debug"]
-                )
-            except Exception as ex:
-                _LOGGER.warning("Failed to load translations for coordinator: %s", ex)
-
             data = await self.api_client.fetch(
                 url,
                 max_retries=self.retry_attempts,
@@ -256,16 +247,8 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
             raise
 
         except Exception as err:
-            error_msg = self._translations.get(
-                "debug.unexpected_error",
-                "Unexpected error fetching {price_type} data: {error}"
-            ).format(price_type=self.price_type, error=str(err))
-            _LOGGER.exception(error_msg)
-
-            raise UpdateFailed(self._translations.get(
-                "debug.unexpected_error_user",
-                "Error: {error}"
-            ).format(error=err)) from err
+            _LOGGER.exception("Unexpected error fetching %s data: %s", self.price_type, err)
+            raise UpdateFailed(f"Error: {err}") from err
 
     def schedule_hourly_update(self):
         if self._unsub_hourly:
