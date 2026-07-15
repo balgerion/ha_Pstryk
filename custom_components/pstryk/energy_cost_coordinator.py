@@ -367,11 +367,12 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     async def _handle_hourly_update(self, now):
-        """Handle the hourly update - fetch all resolutions (daily, monthly, yearly)."""
-        _LOGGER.debug("Triggering hourly cost update (all resolutions)")
+        """Handle the hourly update - refresh daily data, reuse monthly/yearly until midnight."""
+        fetch_all = not self.data or "monthly" not in self.data or "yearly" not in self.data
+        _LOGGER.debug("Triggering hourly cost update (fetch_all=%s)", fetch_all)
         try:
-            data = await self._async_update_data(fetch_all=True)
-            self.data = data
+            data = await self._async_update_data(fetch_all=fetch_all)
+            self.data = {**(self.data or {}), **data}
             self.last_update_success = True
             self.async_update_listeners()
         except Exception as err:
