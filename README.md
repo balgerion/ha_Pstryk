@@ -85,7 +85,32 @@ Integracja korzysta  z nowego endpointu `unified-metrics` dla:
 | `sensor.pstryk_daily_financial_balance` | Dzienny bilans kupna/sprzedaży               |
 | `sensor.pstryk_monthly_financial_balance`| Miesięczny bilans kupna/sprzedaży            |
 | `sensor.pstryk_yearly_financial_balance` | Roczny bilans kupna/sprzedaży                |
+| `sensor.pstryk_json_buy`                | Ceny kupna 48h w formacie JSON (opcjonalny)  |
+| `sensor.pstryk_json_sell`               | Ceny sprzedaży 48h w formacie JSON (opcjonalny) |
 
+### Sensory JSON (opcjonalne)
+
+Po włączeniu opcji **"Włącz sensory JSON z cenami"** w ustawieniach integracji pojawiają się sensory `sensor.pstryk_json_buy` i `sensor.pstryk_json_sell` z atrybutami `prices_today`, `prices_tomorrow` i `prices` (48h) w ustandaryzowanym formacie `{time, price}` — zgodnym z TGE/Nordpool i kompatybilnym z [EV Smart Charging](https://github.com/jonasbkarlsson/ev_smart_charging) czy [cheapest-energy-hours](https://github.com/TheFes/cheapest-energy-hours/).
+
+Przykładowy wykres cen 48h ([apexcharts-card](https://github.com/RomRider/apexcharts-card)):
+
+```yaml
+type: custom:apexcharts-card
+header:
+  show: true
+graph_span: 48h
+span:
+  start: day
+series:
+  - entity: sensor.pstryk_json_buy
+    name: Buy Price
+    data_generator: |
+      return entity.attributes.prices.map(i => [new Date(i.time).getTime(), i.price]);
+  - entity: sensor.pstryk_json_sell
+    name: Sell Price
+    data_generator: |
+      return entity.attributes.prices.map(i => [new Date(i.time).getTime(), i.price]);
+```
 
 Przykładowa Automatyzacja:
 
