@@ -71,9 +71,7 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         pricing = metrics.get("pricing", {})
         price_key = "price_gross" if self.price_type == "buy" else "price_prosumer_gross"
 
-        return convert_price(
-            frame.get(price_key, pricing.get(price_key, frame.get("price_gross")))
-        )
+        return convert_price(frame.get(price_key, pricing.get(price_key)))
     async def _load_cache(self) -> dict[str, Any] | None:
         """Load cached data from disk."""
         if not os.path.exists(self._cache_file):
@@ -219,8 +217,6 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         url = f"{API_URL}{endpoint}"
 
         _LOGGER.debug("Requesting %s data from %s", self.price_type, url)
-
-        now_utc = dt_util.utcnow()
 
         try:
             try:
