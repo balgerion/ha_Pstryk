@@ -50,7 +50,6 @@ async def async_get_config_entry_diagnostics(
         "utility_meters": {},
     }
 
-    # Check MQTT status
     mqtt_publisher = hass.data[DOMAIN].get(f"{entry.entry_id}_mqtt")
     if mqtt_publisher:
         diagnostics_data["mqtt_status"] = {
@@ -62,7 +61,6 @@ async def async_get_config_entry_diagnostics(
     else:
         diagnostics_data["mqtt_status"]["enabled"] = False
 
-    # Check coordinators
     now = dt_util.now()
     tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
     
@@ -76,14 +74,12 @@ async def async_get_config_entry_diagnostics(
                 "mqtt_48h_mode": getattr(coordinator, 'mqtt_48h_mode', False),
             }
             
-            # Check for retry configuration
             if hasattr(coordinator, 'retry_mechanism'):
                 coordinator_data["retry_config"] = {
                     "max_retries": coordinator.retry_mechanism.max_retries,
                     "base_delay": coordinator.retry_mechanism.base_delay,
                 }
             
-            # Check for various update attributes
             if hasattr(coordinator, 'last_update') and coordinator.last_update:
                 coordinator_data["last_update"] = dt_util.as_local(coordinator.last_update).strftime("%Y-%m-%d %H:%M:%S")
             elif hasattr(coordinator, 'last_updated') and coordinator.last_updated:
@@ -91,19 +87,16 @@ async def async_get_config_entry_diagnostics(
             else:
                 coordinator_data["last_update"] = None
                 
-            # Add price count if data available
             if coordinator.data:
                 coordinator_data["prices_count"] = len(coordinator.data.get("prices", []))
                 coordinator_data["prices_today_count"] = len(coordinator.data.get("prices_today", []))
                 coordinator_data["is_cached"] = coordinator.data.get("is_cached", False)
                 
-                # Check tomorrow prices availability
                 all_prices = coordinator.data.get("prices", [])
                 tomorrow_prices = [p for p in all_prices if p.get("start", "").startswith(tomorrow)]
                 coordinator_data["tomorrow_prices_count"] = len(tomorrow_prices)
                 coordinator_data["tomorrow_prices_available"] = len(tomorrow_prices) >= 20
                 
-                # MQTT price count - what would actually be published
                 if coordinator.mqtt_48h_mode:
                     coordinator_data["mqtt_price_count"] = len(all_prices)
                 else:
@@ -111,10 +104,8 @@ async def async_get_config_entry_diagnostics(
                 
             diagnostics_data["coordinators"][price_type] = coordinator_data
 
-    # Check if MQTT integration is available
     diagnostics_data["mqtt_integration_available"] = hass.services.has_service("mqtt", "publish")
     
-    # Check average price sensors
     for price_type in ("buy", "sell"):
         for period in ("monthly", "yearly"):
             entity_id = f"sensor.pstryk_{price_type}_{period}_average"
@@ -130,7 +121,6 @@ async def async_get_config_entry_diagnostics(
                 }
                 diagnostics_data["utility_meters"][f"{price_type}_{period}_average"] = meter_data
     
-    # Check financial balance sensors
     for period in ("daily", "monthly", "yearly"):
         entity_id = f"sensor.pstryk_{period}_financial_balance"
         state = hass.states.get(entity_id)
@@ -150,7 +140,6 @@ async def async_get_config_entry_diagnostics(
             }
             diagnostics_data["utility_meters"][f"financial_balance_{period}"] = balance_data
             
-    # Check cost coordinator
     cost_coordinator = hass.data[DOMAIN].get(f"{entry.entry_id}_cost")
     if cost_coordinator and cost_coordinator.data:
         diagnostics_data["cost_coordinator"] = {
@@ -161,7 +150,6 @@ async def async_get_config_entry_diagnostics(
             "yearly_balance": cost_coordinator.data.get("yearly", {}).get("total_balance"),
         }
         
-        # Check for retry configuration
         if hasattr(cost_coordinator, 'retry_mechanism'):
             diagnostics_data["cost_coordinator"]["retry_config"] = {
                 "max_retries": cost_coordinator.retry_mechanism.max_retries,
