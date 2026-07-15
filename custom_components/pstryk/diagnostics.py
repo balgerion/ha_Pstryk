@@ -74,12 +74,6 @@ async def async_get_config_entry_diagnostics(
                 "mqtt_48h_mode": getattr(coordinator, 'mqtt_48h_mode', False),
             }
             
-            if hasattr(coordinator, 'retry_mechanism'):
-                coordinator_data["retry_config"] = {
-                    "max_retries": coordinator.retry_mechanism.max_retries,
-                    "base_delay": coordinator.retry_mechanism.base_delay,
-                }
-            
             if hasattr(coordinator, 'last_update') and coordinator.last_update:
                 coordinator_data["last_update"] = dt_util.as_local(coordinator.last_update).strftime("%Y-%m-%d %H:%M:%S")
             elif hasattr(coordinator, 'last_updated') and coordinator.last_updated:
@@ -131,7 +125,6 @@ async def async_get_config_entry_diagnostics(
                 "buy_cost": state.attributes.get("Buy cost", 0),
                 "sell_revenue": state.attributes.get("Sell revenue", 0),
                 "balance": state.attributes.get("Balance", 0),
-                "buy_cost": state.attributes.get("Buy cost", 0),
                 "distribution_cost": state.attributes.get("Distribution cost", 0),
                 "excise": state.attributes.get("Excise", 0),
                 "vat": state.attributes.get("VAT", 0),
@@ -149,11 +142,5 @@ async def async_get_config_entry_diagnostics(
             "monthly_balance": cost_coordinator.data.get("monthly", {}).get("total_balance"),
             "yearly_balance": cost_coordinator.data.get("yearly", {}).get("total_balance"),
         }
-        
-        if hasattr(cost_coordinator, 'retry_mechanism'):
-            diagnostics_data["cost_coordinator"]["retry_config"] = {
-                "max_retries": cost_coordinator.retry_mechanism.max_retries,
-                "base_delay": cost_coordinator.retry_mechanism.base_delay,
-            }
 
     return diagnostics_data
