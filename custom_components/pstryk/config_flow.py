@@ -1,4 +1,3 @@
-"""Config flow for Pstryk Energy integration - Enhanced version."""
 from homeassistant import config_entries
 import voluptuous as vol
 import asyncio
@@ -31,20 +30,16 @@ from .const import (
 )
 
 class MQTTNotConfiguredError(HomeAssistantError):
-    """Exception raised when MQTT is not configured."""
     pass
 
 class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Pstryk Energy."""
     VERSION = 3
 
     def __init__(self):
-        """Initialize the config flow."""
         self._data = {}
         self._options = {}
 
     async def async_step_user(self, user_input=None):
-        """Handle the initial step - API configuration."""
         errors = {}
         if user_input is not None:
             api_key = user_input["api_key"]
@@ -65,7 +60,6 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_price_settings(self, user_input=None):
-        """Handle price monitoring settings."""
         if user_input is not None:
             self._data.update({
                 "buy_top": user_input["buy_top"],
@@ -91,7 +85,6 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_mqtt_settings(self, user_input=None):
-        """Handle MQTT configuration."""
         errors = {}
         
         if user_input is not None:
@@ -122,7 +115,6 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_api_retry(self, user_input=None):
-        """Handle API retry configuration."""
         if user_input is not None:
             self._options.update({
                 CONF_RETRY_ATTEMPTS: user_input.get(CONF_RETRY_ATTEMPTS, DEFAULT_RETRY_ATTEMPTS),
@@ -148,7 +140,6 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
     
     async def _validate_api_key(self, api_key):
-        """Validate API key by calling a simple API endpoint."""
         now = dt_util.utcnow()
         start_utc = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         end_utc = (now + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -168,7 +159,6 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return False
     
     async def _check_mqtt_configuration(self):
-        """Check if MQTT integration is properly configured."""
         try:
             return self.hass.services.has_service("mqtt", "publish")
         except Exception:
@@ -176,15 +166,12 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     
     @staticmethod
     def async_get_options_flow(config_entry):
-        """Get the options flow for this handler."""
         return PstrykOptionsFlowHandler()
 
 
 class PstrykOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle options flow for Pstryk Energy - single page view."""
 
     async def async_step_init(self, user_input=None):
-        """Manage the options - single page for quick configuration."""
         errors = {}
         
         if user_input is not None:
@@ -255,7 +242,6 @@ class PstrykOptionsFlowHandler(config_entries.OptionsFlow):
         )
 
     async def _check_mqtt_configuration(self):
-        """Check if MQTT is properly configured."""
         try:
             mqtt_config_entry = None
             for entry in self.hass.config_entries.async_entries("mqtt"):
