@@ -1,4 +1,3 @@
-"""Sensor platform for Pstryk Energy integration."""
 import logging
 import asyncio
 from datetime import timedelta
@@ -31,7 +30,6 @@ _VERSION_CACHE = None
 
 
 def get_integration_version(hass: HomeAssistant) -> str:
-    """Return integration version cached during setup."""
     return _VERSION_CACHE or "unknown"
 
 
@@ -40,7 +38,6 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities,
 ) -> None:
-    """Set up the Pstryk sensors via the coordinator."""
     global _VERSION_CACHE
     if _VERSION_CACHE is None:
         try:
@@ -109,7 +106,6 @@ async def async_setup_entry(
     _LOGGER.info("Starting quick initialization - loading price coordinators only")
 
     async def safe_initial_fetch(coord, coord_type):
-        """Safely fetch initial data for coordinator."""
         try:
             data = await coord._async_update_data()
             coord.data = data
@@ -188,7 +184,6 @@ async def async_setup_entry(
     async_add_entities(entities + remaining_entities)
 
     async def lazy_load_cost_data():
-        """Load cost coordinator data in background - sensors update automatically via coordinator."""
         _LOGGER.info("Waiting 15 seconds before loading cost coordinator data")
         await asyncio.sleep(15)
 
@@ -210,7 +205,6 @@ async def async_setup_entry(
 
 
 class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
-    """Combined price sensor with table data attributes."""
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, coordinator: PstrykDataUpdateCoordinator, price_type: str, top_count: int, worst_count: int, entry_id: str):
@@ -223,7 +217,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         self._last_data_hash = None
         
     async def async_added_to_hass(self):
-        """When entity is added to Home Assistant."""
         await super().async_added_to_hass()
 
     @property
@@ -236,7 +229,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
     
     @property
     def device_info(self):
-        """Return device information."""
         return {
             "identifiers": {(DOMAIN, "pstryk_energy")},
             "name": "Pstryk Energy",
@@ -246,7 +238,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         }
 
     def _get_current_price(self):
-        """Get current price based on current time."""
         if not self.coordinator.data or not self.coordinator.data.get("prices"):
             return None
             
@@ -284,7 +275,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         return "PLN/kWh"
     
     def _get_next_hour_price(self) -> dict:
-        """Get price data for the next hour."""
         if not self.coordinator.data:
             return None
             
@@ -364,7 +354,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         return None
     
     def _get_cached_sorted_prices(self, today):
-        """Get cached sorted prices or compute if data changed."""
         data_hash = hash(tuple((p["start"], p["price"]) for p in today))
         
         if self._last_data_hash != data_hash or self._cached_sorted_prices is None:
@@ -391,7 +380,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         return self._cached_sorted_prices
     
     def _count_consecutive_same_values(self, prices):
-        """Count maximum consecutive hours with the same price."""
         if not prices:
             return 0
             
@@ -414,7 +402,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         return max_consecutive
     
     def _get_mqtt_price_count(self):
-        """Get the actual count of prices that would be published to MQTT."""
         if not self.coordinator.data:
             return 0
             
@@ -439,7 +426,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
             return valid_count
     
     def _get_sunrise_sunset_average(self, today_prices):
-        """Calculate average price between sunrise and sunset."""
         if not today_prices:
             return None
             
@@ -505,7 +491,6 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         
     @property
     def extra_state_attributes(self) -> dict:
-        """Include the price table attributes in the current price sensor."""
         now = dt_util.as_local(dt_util.utcnow())
         
         next_hour_key = _TRANSLATIONS_CACHE.get(
@@ -675,12 +660,10 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         
     @property
     def available(self) -> bool:
-        """Return if entity is available."""
         return self.coordinator.last_update_success and self.coordinator.data is not None
 
 
 class PstrykJsonPriceSensor(CoordinatorEntity, SensorEntity):
-    """Standardized price table sensor (TGE/Nordpool-compatible attribute format)."""
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:code-json"
 
@@ -751,13 +734,11 @@ class PstrykJsonPriceSensor(CoordinatorEntity, SensorEntity):
 
 
 class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
-    """Average price sensor using weighted averages from API data."""
     _attr_state_class = SensorStateClass.MEASUREMENT
     
     def __init__(self, cost_coordinator: PstrykCostDataUpdateCoordinator, 
                  price_coordinator: PstrykDataUpdateCoordinator,
                  period: str, entry_id: str):
-        """Initialize the average price sensor."""
         self.cost_coordinator = cost_coordinator
         self.price_coordinator = price_coordinator
         self.price_type = price_coordinator.price_type
@@ -770,7 +751,6 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
         self._total_revenue = 0.0
         
     async def async_added_to_hass(self):
-        """Restore state when entity is added."""
         await super().async_added_to_hass()
         
         self.async_on_remove(
@@ -795,7 +775,6 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
         
     @property
     def name(self) -> str:
-        """Return the name of the sensor."""
         period_name = _TRANSLATIONS_CACHE.get(
             f"entity.sensor.period_{self.period}",
             self.period.title()
@@ -804,12 +783,10 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
         
     @property
     def unique_id(self) -> str:
-        """Return unique ID."""
         return f"{DOMAIN}_{self.price_type}_{self.period}_average"
         
     @property
     def device_info(self):
-        """Return device information."""
         return {
             "identifiers": {(DOMAIN, "pstryk_energy")},
             "name": "Pstryk Energy",
@@ -820,17 +797,14 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
         
     @property
     def native_value(self):
-        """Return the state of the sensor."""
         return self._state
         
     @property
     def native_unit_of_measurement(self) -> str:
-        """Return the unit of measurement."""
         return "PLN/kWh"
         
     @property
     def extra_state_attributes(self) -> dict:
-        """Return extra state attributes."""
         period_key = _TRANSLATIONS_CACHE.get(
             "entity.sensor.period",
             "Period"
@@ -878,7 +852,6 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
         
     @callback
     def _handle_cost_update(self) -> None:
-        """Handle updated data from the cost coordinator."""
         if not self.cost_coordinator or not self.cost_coordinator.data:
             return
             
@@ -912,27 +885,23 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
         
     @property
     def available(self) -> bool:
-        """Return if entity is available."""
         return (self.cost_coordinator is not None and 
                 self.cost_coordinator.last_update_success and
                 self.cost_coordinator.data is not None)
 
 
 class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
-    """Financial balance sensor that gets data directly from API."""
     _attr_state_class = SensorStateClass.TOTAL
     _attr_device_class = SensorDeviceClass.MONETARY
     
     def __init__(self, coordinator: PstrykCostDataUpdateCoordinator, 
                  period: str, entry_id: str):
-        """Initialize the financial balance sensor."""
         super().__init__(coordinator)
         self.period = period
         self.entry_id = entry_id
         
     @property
     def name(self) -> str:
-        """Return the name of the sensor."""
         period_name = _TRANSLATIONS_CACHE.get(
             f"entity.sensor.period_{self.period}",
             self.period.title()
@@ -945,12 +914,10 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
         
     @property
     def unique_id(self) -> str:
-        """Return unique ID."""
         return f"{DOMAIN}_financial_balance_{self.period}"
         
     @property
     def device_info(self):
-        """Return device information."""
         return {
             "identifiers": {(DOMAIN, "pstryk_energy")},
             "name": "Pstryk Energy",
@@ -961,7 +928,6 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
         
     @property
     def native_value(self):
-        """Return the state of the sensor from API data."""
         if not self.coordinator.data:
             return None
             
@@ -975,12 +941,10 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
         
     @property
     def native_unit_of_measurement(self) -> str:
-        """Return the unit of measurement."""
         return "PLN"
         
     @property
     def icon(self) -> str:
-        """Return the icon based on balance."""
         if self.native_value is None:
             return "mdi:currency-usd-off"
         elif self.native_value < 0:
@@ -992,7 +956,6 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
             
     @property
     def extra_state_attributes(self) -> dict:
-        """Return extra state attributes from API data."""
         if not self.coordinator.data or not self.coordinator.data.get(self.period):
             return {}
             
@@ -1075,5 +1038,4 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
         
     @property
     def available(self) -> bool:
-        """Return if entity is available."""
         return self.coordinator.last_update_success and self.coordinator.data is not None
