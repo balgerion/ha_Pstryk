@@ -51,19 +51,6 @@ Integracja korzysta  z nowego endpointu `unified-metrics` dla:
 2. Wgraj wszystkie pliki z repozytorium.
 3. Zrestartuj Home Assistant
 
-## Testowanie API
-
-W repo jest gotowa kolekcja Postmana:
-- `Pstryk Integrations API.postman_collection.json`
-
-Jak użyć:
-1. Zaimportuj kolekcję do Postmana
-2. Otwórz zakładkę `Variables`
-3. Ustaw `api_token` na swój klucz API Pstryk
-4. Uruchamiaj requesty z folderu `Unified Metrics`
-
-Folder `Legacy Comparison` zostawiłem do ręcznego porównywania odpowiedzi ze starych endpointów podczas migracji.
-
 ## Konfiguracja
 1. Przejdź do `Ustawienia` → `Urządzenia i usługi`
 2. Kliknij `Dodaj integrację`
