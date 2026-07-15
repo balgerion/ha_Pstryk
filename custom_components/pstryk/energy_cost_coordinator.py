@@ -26,7 +26,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         self._unsub_hourly = None
         self._unsub_midnight = None
 
-        # Get retry configuration
         if retry_attempts is None:
             retry_attempts = DEFAULT_RETRY_ATTEMPTS
         if retry_delay is None:
@@ -35,8 +34,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         self.retry_attempts = retry_attempts
         self.retry_delay = retry_delay
 
-        # We use custom scheduled updates (midnight, hourly)
-        # No automatic update_interval needed
         super().__init__(
             hass,
             _LOGGER,
@@ -55,22 +52,16 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             now = dt_util.utcnow()
 
-            # For daily data: fetch yesterday, today, and tomorrow to ensure we have complete data
-            # This handles the case where live data might be from yesterday
             today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
             yesterday_start = today_start - timedelta(days=1)
             day_after_tomorrow = today_start + timedelta(days=2)
 
-            # For monthly data: always fetch current month only
-            # The API handles month boundaries internally, so we don't need to worry about it
             month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            # Get first day of next month
             if now.month == 12:
                 next_month_start = month_start.replace(year=now.year + 1, month=1)
             else:
                 next_month_start = month_start.replace(month=now.month + 1)
 
-            # For yearly data: fetch current year using month resolution
             year_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
             next_year_start = year_start.replace(year=now.year + 1)
 
@@ -78,7 +69,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
 
             data = {}
 
-            # Fetch daily data
             daily_url = API_URL + UNIFIED_METRICS_ENDPOINT.format(
                 resolution="day",
                 start=format_time(yesterday_start),
@@ -99,11 +89,7 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
             except UpdateFailed as e:
                 _LOGGER.warning(f"Failed to fetch daily data: {e}. Continuing with other resolutions.")
 
-            # Fetch monthly and yearly data only when fetch_all=True (midnight update)
             if fetch_all:
-                # Fetch monthly data
-                # IMPORTANT: For monthly data at month boundary, only request current month
-                # to avoid API 500 errors when crossing month boundaries
                 monthly_url = API_URL + UNIFIED_METRICS_ENDPOINT.format(
                     resolution="month",
                     start=format_time(month_start),
@@ -124,7 +110,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
                 except UpdateFailed as e:
                     _LOGGER.warning(f"Failed to fetch monthly data: {e}. Continuing with other resolutions.")
 
-                # Fetch yearly data using month resolution
                 yearly_url = API_URL + UNIFIED_METRICS_ENDPOINT.format(
                     resolution="month",
                     start=format_time(year_start),
@@ -147,7 +132,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
             else:
                 _LOGGER.debug("Skipping monthly and yearly data fetch (hourly update - using cached data)")
 
-            # If we have at least one resolution, consider it a success
             if data:
                 _LOGGER.debug(f"Successfully fetched energy cost and usage data for resolutions: {list(data.keys())}")
                 return data
@@ -356,7 +340,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         """Handle midnight update - fetch all data (daily, monthly, yearly)."""
         _LOGGER.debug("Running scheduled midnight cost update (all resolutions)")
         try:
-            # Fetch all resolutions at midnight
             data = await self._async_update_data(fetch_all=True)
             self.data = data
             self.last_update_success = True
@@ -365,7 +348,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.error("Midnight cost update failed: %s - will retry next hour", err)
             self.last_update_success = False
         finally:
-            # Always reschedule, even if update failed
             self.schedule_midnight_update()
 
     def schedule_hourly_update(self):
@@ -388,7 +370,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         """Handle the hourly update - fetch all resolutions (daily, monthly, yearly)."""
         _LOGGER.debug("Triggering hourly cost update (all resolutions)")
         try:
-            # Fetch all resolutions during hourly updates
             data = await self._async_update_data(fetch_all=True)
             self.data = data
             self.last_update_success = True
@@ -397,5 +378,4 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.error("Hourly cost update failed: %s - will retry next hour", err)
             self.last_update_success = False
         finally:
-            # Always reschedule, even if update failed
             self.schedule_hourly_update()
