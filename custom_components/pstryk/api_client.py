@@ -28,14 +28,11 @@ class PstrykAPIClient:
         self._translations: Dict[str, str] = {}
         self._translations_loaded = False
 
-        # Rate limiting: {endpoint_key: {"retry_after": datetime, "backoff": float}}
         self._rate_limits: Dict[str, Dict[str, Any]] = {}
         self._rate_limit_lock = asyncio.Lock()
 
-        # Request throttling - limit concurrent requests
-        self._request_semaphore = asyncio.Semaphore(3)  # Max 3 concurrent requests
+        self._request_semaphore = asyncio.Semaphore(3)
 
-        # Deduplication - track in-flight requests
         self._in_flight: Dict[str, asyncio.Task] = {}
         self._in_flight_lock = asyncio.Lock()
 
@@ -54,7 +51,6 @@ class PstrykAPIClient:
                     self.hass, self.hass.config.language, DOMAIN, ["debug"]
                 )
                 self._translations_loaded = True
-                # Debug: log sample keys to understand the format
                 if self._translations:
                     sample_keys = list(self._translations.keys())[:3]
                     _LOGGER.debug("Loaded %d translation keys, samples: %s",
@@ -66,12 +62,11 @@ class PstrykAPIClient:
 
     def _t(self, key: str, **kwargs) -> str:
         """Get translated string with fallback."""
-        # Try different key formats as async_get_translations may return different formats
         possible_keys = [
-            f"component.{DOMAIN}.debug.{key}",  # Full format: component.pstryk.debug.key
-            f"{DOMAIN}.debug.{key}",            # Domain format: pstryk.debug.key
-            f"debug.{key}",                      # Short format: debug.key
-            key                                  # Just the key
+            f"component.{DOMAIN}.debug.{key}",
+            f"{DOMAIN}.debug.{key}",
+            f"debug.{key}",
+            key
         ]
 
         template = None
@@ -80,9 +75,7 @@ class PstrykAPIClient:
             if template:
                 break
 
-        # If translation not found, create a fallback message
         if not template:
-            # Fallback patterns for common error types
             if key == "api_error_html":
                 template = "API error {status} for {endpoint} (HTML error page received)"
             elif key == "rate_limited":
@@ -101,7 +94,6 @@ class PstrykAPIClient:
 
     def _get_endpoint_key(self, url: str) -> str:
         """Extract endpoint key from URL for rate limiting."""
-        # The integration now uses unified-metrics for both pricing and meter data.
         if "meter-data/unified-metrics" in url:
             return "unified-metrics"
         return "unknown"
@@ -117,22 +109,18 @@ class PstrykAPIClient:
                     wait_time = (retry_after - datetime.now()).total_seconds()
                     return wait_time
                 elif retry_after and datetime.now() >= retry_after:
-                    # Rate limit expired, clear it
                     del self._rate_limits[endpoint_key]
 
         return None
 
     def _calculate_backoff(self, attempt: int, base_delay: float = 20.0) -> float:
         """Calculate exponential backoff with jitter."""
-        # Exponential backoff: base_delay * (2 ^ attempt)
         backoff = base_delay * (2 ** attempt)
-        # Add jitter: ±20% randomization
         jitter = backoff * 0.2 * (2 * random.random() - 1)
         return max(1.0, backoff + jitter)
 
     async def _handle_rate_limit(self, response: aiohttp.ClientResponse, endpoint_key: str):
         """Handle 429 rate limit response."""
-        # Ensure translations are loaded
         await self._load_translations()
 
         retry_after_header = response.headers.get("Retry-After")
@@ -140,17 +128,14 @@ class PstrykAPIClient:
 
         if retry_after_header:
             try:
-                # Try parsing as seconds
                 wait_time = int(retry_after_header)
             except ValueError:
-                # Try parsing as HTTP date
                 try:
                     retry_date = parsedate_to_datetime(retry_after_header)
                     wait_time = (retry_date - datetime.now()).total_seconds()
                 except Exception:
                     pass
 
-        # Fallback to 3600 seconds (1 hour) if not specified
         if wait_time is None:
             wait_time = 3600
 
@@ -174,15 +159,12 @@ class PstrykAPIClient:
         base_delay: float = 20.0
     ) -> Dict[str, Any]:
         """Make API request with retries, rate limiting, and deduplication."""
-        # Load translations if not already loaded
         await self._load_translations()
 
         endpoint_key = self._get_endpoint_key(url)
 
-        # Check if we're rate limited
         wait_time = await self._check_rate_limit(endpoint_key)
         if wait_time and wait_time > 0:
-            # If wait time is reasonable, wait
             if wait_time <= 60:
                 _LOGGER.info(
                     self._t("waiting_rate_limit", seconds=int(wait_time))
@@ -202,20 +184,16 @@ class PstrykAPIClient:
 
         for attempt in range(max_retries):
             try:
-                # Use semaphore to limit concurrent requests
                 async with self._request_semaphore:
                     async with asyncio.timeout(API_TIMEOUT):
                         async with self.session.get(url, headers=headers) as response:
-                            # Handle different status codes
                             if response.status == 200:
                                 data = await response.json()
                                 return data
 
                             elif response.status == 429:
-                                # Handle rate limiting
                                 await self._handle_rate_limit(response, endpoint_key)
 
-                                # Retry with exponential backoff
                                 if attempt < max_retries - 1:
                                     backoff = self._calculate_backoff(attempt, base_delay)
                                     _LOGGER.debug(
@@ -231,20 +209,16 @@ class PstrykAPIClient:
 
                             elif response.status == 500:
                                 error_text = await response.text()
-                                # Extract plain text from HTML if present
                                 if error_text.strip().startswith('<!doctype html>') or error_text.strip().startswith('<html'):
-                                    # Just log that it's HTML, not the whole HTML
                                     _LOGGER.error(
                                         self._t("api_error_html", status=500, endpoint=endpoint_key)
                                     )
                                 else:
-                                    # Log actual error text (truncated)
                                     _LOGGER.error(
                                         "API returned 500 for %s: %s",
                                         endpoint_key, error_text[:100]
                                     )
 
-                                # Retry with backoff
                                 if attempt < max_retries - 1:
                                     backoff = self._calculate_backoff(attempt, base_delay)
                                     _LOGGER.debug(
@@ -270,7 +244,6 @@ class PstrykAPIClient:
 
                             else:
                                 error_text = await response.text()
-                                # Clean HTML from error messages
                                 if error_text.strip().startswith('<!doctype html>') or error_text.strip().startswith('<html'):
                                     _LOGGER.error(
                                         self._t("api_error_html", status=response.status, endpoint=endpoint_key)
@@ -281,7 +254,6 @@ class PstrykAPIClient:
                                         response.status, endpoint_key, error_text[:100]
                                     )
 
-                                # For other errors, retry with backoff
                                 if attempt < max_retries - 1:
                                     backoff = self._calculate_backoff(attempt, base_delay)
                                     await asyncio.sleep(backoff)
@@ -323,7 +295,6 @@ class PstrykAPIClient:
                 )
                 break
 
-        # All retries exhausted, raise the error
         if last_exception:
             raise UpdateFailed(
                 f"Failed to fetch data from {endpoint_key} after {max_retries} attempts"
@@ -338,18 +309,14 @@ class PstrykAPIClient:
         base_delay: float = 20.0
     ) -> Dict[str, Any]:
         """Fetch data with deduplication of concurrent requests."""
-        # Check if there's already an in-flight request for this URL
         async with self._in_flight_lock:
             if url in self._in_flight:
                 _LOGGER.debug("Deduplicating request for %s", url)
-                # Wait for the existing request to complete
                 try:
                     return await self._in_flight[url]
                 except Exception:
-                    # If the in-flight request failed, create a new one
                     pass
 
-            # Create new request task
             task = asyncio.create_task(
                 self._make_request(url, max_retries, base_delay)
             )
@@ -359,6 +326,5 @@ class PstrykAPIClient:
             result = await task
             return result
         finally:
-            # Remove from in-flight requests
             async with self._in_flight_lock:
                 self._in_flight.pop(url, None)
