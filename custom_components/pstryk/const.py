@@ -1,4 +1,3 @@
-"""Constants for the Pstryk Energy integration."""
 
 DOMAIN = "pstryk"
 API_URL = "https://api.pstryk.pl/integrations/"
