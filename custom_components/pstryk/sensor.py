@@ -652,10 +652,14 @@ class PstrykJsonPriceSensor(CoordinatorEntity, SensorEntity):
         entries = self._price_entries()
         today = dt_util.now().date()
         tomorrow = today + timedelta(days=1)
+        today_entries = [e for e in entries if e["time"].date() == today]
+        tomorrow_entries = [e for e in entries if e["time"].date() == tomorrow]
+        if is_likely_placeholder_data(tomorrow_entries):
+            tomorrow_entries = []
         return {
-            "prices_today": [e for e in entries if e["time"].date() == today],
-            "prices_tomorrow": [e for e in entries if e["time"].date() == tomorrow],
-            "prices": entries,
+            "prices_today": today_entries,
+            "prices_tomorrow": tomorrow_entries,
+            "prices": today_entries + tomorrow_entries,
         }
 
     @property
