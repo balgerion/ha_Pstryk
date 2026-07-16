@@ -163,15 +163,16 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
                 mqtt_topic_buy = entry.options.get(CONF_MQTT_TOPIC_BUY, DEFAULT_MQTT_TOPIC_BUY)
                 mqtt_topic_sell = entry.options.get(CONF_MQTT_TOPIC_SELL, DEFAULT_MQTT_TOPIC_SELL)
 
-                await asyncio.sleep(5)
+                async def _publish_after_refresh():
+                    await asyncio.sleep(5)
+                    from .mqtt_common import publish_mqtt_prices
+                    success = await publish_mqtt_prices(self.hass, entry_id, mqtt_topic_buy, mqtt_topic_sell)
+                    if success:
+                        _LOGGER.info("Successfully published 48h prices to MQTT after detecting valid tomorrow prices")
+                    else:
+                        _LOGGER.error("Failed to publish to MQTT after detecting tomorrow prices")
 
-                from .mqtt_common import publish_mqtt_prices
-                success = await publish_mqtt_prices(self.hass, entry_id, mqtt_topic_buy, mqtt_topic_sell)
-
-                if success:
-                    _LOGGER.info("Successfully published 48h prices to MQTT after detecting valid tomorrow prices")
-                else:
-                    _LOGGER.error("Failed to publish to MQTT after detecting tomorrow prices")
+                self.hass.async_create_task(_publish_after_refresh())
 
         self._had_tomorrow_prices = has_valid_tomorrow_prices
 
