@@ -899,6 +899,7 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
                 excise_key: frame.get("excise", 0),
                 vat_key: frame.get("vat", 0),
                 service_cost_key: frame.get("service_cost_net", 0),
+                "Power fee": frame.get("power_fee_cost_net", 0),
                 "start": start_local.strftime("%Y-%m-%d") if start_local else None,
                 "end": end_local.strftime("%Y-%m-%d") if end_local else None,
             })
