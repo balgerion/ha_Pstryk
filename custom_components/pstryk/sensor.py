@@ -226,29 +226,33 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
             "sw_version": get_integration_version(self.hass),
         }
 
-    def _get_current_price(self):
+    def _get_current_entry(self):
         if not self.coordinator.data or not self.coordinator.data.get("prices"):
             return None
-            
+
         now_utc = dt_util.utcnow()
         for price_entry in self.coordinator.data.get("prices", []):
             try:
                 if "start" not in price_entry:
                     continue
-                    
+
                 price_datetime = dt_util.parse_datetime(price_entry["start"])
                 if not price_datetime:
                     continue
-                    
+
                 price_datetime_utc = dt_util.as_utc(price_datetime)
                 price_end_utc = price_datetime_utc + timedelta(hours=1)
-                
+
                 if price_datetime_utc <= now_utc < price_end_utc:
-                    return price_entry.get("price")
+                    return price_entry
             except Exception as e:
                 _LOGGER.error("Error determining current price: %s", str(e))
-                
+
         return None
+
+    def _get_current_price(self):
+        entry = self._get_current_entry()
+        return entry.get("price") if entry else None
     
     @property
     def native_value(self):
@@ -511,7 +515,9 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
                 price_count_key: 0,
                 using_cached_key: False,
                 tomorrow_available_key: False,
-                mqtt_price_count_key: 0
+                mqtt_price_count_key: 0,
+                "Is cheap": None,
+                "Is expensive": None
             }
             
         next_hour_data = self._get_next_hour_price()
@@ -568,6 +574,7 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         sorted_prices = self._get_cached_sorted_prices(today) if today else {"best": [], "worst": []}
         
         mqtt_price_count = self._get_mqtt_price_count()
+        current_entry = self._get_current_entry() or {}
         
         return {
             avg_price_remaining_with_hours: avg_price_remaining,
@@ -584,6 +591,8 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
             using_cached_key: is_cached,
             tomorrow_available_key: tomorrow_available,
             mqtt_price_count_key: mqtt_price_count,
+            "Is cheap": current_entry.get("is_cheap"),
+            "Is expensive": current_entry.get("is_expensive"),
             "mqtt_48h_mode": self.coordinator.mqtt_48h_mode
         }
         
