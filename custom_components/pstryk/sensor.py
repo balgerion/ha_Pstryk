@@ -176,7 +176,7 @@ async def async_setup_entry(
 
         _LOGGER.info("Loading cost coordinator data in background")
         try:
-            data = await cost_coordinator._async_update_data(fetch_all=True)
+            data = await cost_coordinator._async_update_data()
             cost_coordinator.data = data
             cost_coordinator.last_update_success = True
             cost_coordinator.async_update_listeners()

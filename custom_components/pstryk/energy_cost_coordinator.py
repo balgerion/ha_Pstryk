@@ -22,7 +22,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         self.api_client = api_client
         self._unsub_hourly = None
         self._unsub_midnight = None
-        self._last_full_fetch_date = None
 
         if retry_attempts is None:
             retry_attempts = DEFAULT_RETRY_ATTEMPTS
@@ -38,8 +37,8 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
             name=f"{DOMAIN}_cost",
         )
 
-    async def _async_update_data(self, fetch_all: bool = True):
-        _LOGGER.debug("Starting energy cost and usage data fetch (fetch_all=%s)", fetch_all)
+    async def _async_update_data(self):
+        _LOGGER.debug("Starting energy cost and usage data fetch")
 
         try:
             now = dt_util.utcnow()
@@ -47,12 +46,6 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
             today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
             yesterday_start = today_start - timedelta(days=1)
             day_after_tomorrow = today_start + timedelta(days=2)
-
-            month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            if now.month == 12:
-                next_month_start = month_start.replace(year=now.year + 1, month=1)
-            else:
-                next_month_start = month_start.replace(month=now.month + 1)
 
             year_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
             next_year_start = year_start.replace(year=now.year + 1)
@@ -81,52 +74,28 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
             except UpdateFailed as e:
                 _LOGGER.warning(f"Failed to fetch daily data: {e}. Continuing with other resolutions.")
 
-            if fetch_all:
-                monthly_url = API_URL + UNIFIED_METRICS_ENDPOINT.format(
-                    resolution="month",
-                    start=format_time(month_start),
-                    end=format_time(next_month_start),
+            yearly_url = API_URL + UNIFIED_METRICS_ENDPOINT.format(
+                resolution="month",
+                start=format_time(year_start),
+                end=format_time(next_year_start),
+            )
+
+            _LOGGER.debug(f"Fetching yearly data for {year_start.year}")
+
+            try:
+                yearly_data = await self.api_client.fetch(
+                    yearly_url,
+                    max_retries=self.retry_attempts,
+                    base_delay=self.retry_delay
                 )
 
-                _LOGGER.debug(f"Fetching monthly data for {month_start.strftime('%B %Y')}")
-
-                try:
-                    monthly_data = await self.api_client.fetch(
-                        monthly_url,
-                        max_retries=self.retry_attempts,
-                        base_delay=self.retry_delay
-                    )
-
-                    if monthly_data:
-                        data["monthly"] = self._process_monthly_data_simple(monthly_data)
-                except UpdateFailed as e:
-                    _LOGGER.warning(f"Failed to fetch monthly data: {e}. Continuing with other resolutions.")
-
-                yearly_url = API_URL + UNIFIED_METRICS_ENDPOINT.format(
-                    resolution="month",
-                    start=format_time(year_start),
-                    end=format_time(next_year_start),
-                )
-
-                _LOGGER.debug(f"Fetching yearly data for {year_start.year}")
-
-                try:
-                    yearly_data = await self.api_client.fetch(
-                        yearly_url,
-                        max_retries=self.retry_attempts,
-                        base_delay=self.retry_delay
-                    )
-
-                    if yearly_data:
-                        data["yearly"] = self._process_yearly_data_simple(yearly_data)
-                except UpdateFailed as e:
-                    _LOGGER.warning(f"Failed to fetch yearly data: {e}.")
-            else:
-                _LOGGER.debug("Skipping monthly and yearly data fetch (hourly update - using cached data)")
+                if yearly_data:
+                    data["yearly"] = self._process_yearly_data_simple(yearly_data)
+                    data["monthly"] = self._process_monthly_data_simple(yearly_data)
+            except UpdateFailed as e:
+                _LOGGER.warning(f"Failed to fetch yearly data: {e}.")
 
             if data:
-                if fetch_all:
-                    self._last_full_fetch_date = dt_util.now().strftime("%Y-%m-%d")
                 _LOGGER.debug(f"Successfully fetched energy cost and usage data for resolutions: {list(data.keys())}")
                 return data
             else:
@@ -189,20 +158,27 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
 
         frames = self._normalized_frames(response)
 
-        if frames:
-            frame = frames[0]
+        current_month = dt_util.now().strftime("%Y-%m")
+
+        def frame_month(f):
+            parsed = dt_util.parse_datetime(f.get("start") or "")
+            return dt_util.as_local(parsed).strftime("%Y-%m") if parsed else ""
+
+        frame = next(
+            (f for f in frames if frame_month(f) == current_month),
+            frames[-1] if frames else None,
+        )
+
+        if frame:
             result["frame"] = frame
             result["total_balance"] = frame.get("energy_balance_value", 0)
             result["total_sold"] = frame.get("energy_sold_value", 0)
             result["total_cost"] = abs(frame.get("fae_cost", 0))
-            _LOGGER.info(f"Monthly cost data: balance={result['total_balance']}, "
-                        f"sold={result['total_sold']}, cost={result['total_cost']}")
-
-        if frames:
-            frame = frames[0]
             result["fae_usage"] = frame.get("fae_usage", 0)
             result["rae_usage"] = frame.get("rae", 0)
-            _LOGGER.info(f"Monthly usage data: fae={result['fae_usage']}, rae={result['rae_usage']}")
+            _LOGGER.info(f"Monthly data from frame {frame.get('start')}: balance={result['total_balance']}, "
+                        f"sold={result['total_sold']}, cost={result['total_cost']}, "
+                        f"fae={result['fae_usage']}, rae={result['rae_usage']}")
 
         return result
 
@@ -328,7 +304,7 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
     async def _handle_midnight_update(self, _):
         _LOGGER.debug("Running scheduled midnight cost update (all resolutions)")
         try:
-            data = await self._async_update_data(fetch_all=True)
+            data = await self._async_update_data()
             self.data = data
             self.last_update_success = True
             self.async_update_listeners()
@@ -354,16 +330,9 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     async def _handle_hourly_update(self, now):
-        today = dt_util.now().strftime("%Y-%m-%d")
-        fetch_all = (
-            not self.data
-            or "monthly" not in self.data
-            or "yearly" not in self.data
-            or self._last_full_fetch_date != today
-        )
-        _LOGGER.debug("Triggering hourly cost update (fetch_all=%s)", fetch_all)
+        _LOGGER.debug("Triggering hourly cost update")
         try:
-            data = await self._async_update_data(fetch_all=fetch_all)
+            data = await self._async_update_data()
             self.data = {**(self.data or {}), **data}
             self.last_update_success = True
             self.async_update_listeners()
