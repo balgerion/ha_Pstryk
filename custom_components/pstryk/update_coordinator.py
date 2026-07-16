@@ -218,7 +218,13 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
                     continue
 
                 local_start = dt_util.as_local(start).strftime("%Y-%m-%dT%H:%M:%S")
-                prices.append({"start": local_start, "price": val})
+                pricing = f.get("metrics", {}).get("pricing", {})
+                prices.append({
+                    "start": local_start,
+                    "price": val,
+                    "is_cheap": pricing.get("is_cheap", False),
+                    "is_expensive": pricing.get("is_expensive", False),
+                })
 
             today_local = dt_util.now().strftime("%Y-%m-%d")
             prices_today = [p for p in prices if p["start"].startswith(today_local)]
