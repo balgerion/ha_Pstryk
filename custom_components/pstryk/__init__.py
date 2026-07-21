@@ -7,7 +7,6 @@ from homeassistant.helpers.translation import async_get_translations
 
 from .mqtt_publisher import PstrykMqttPublisher
 from .mqtt_common import setup_periodic_mqtt_publish
-from .services import async_setup_services, async_unload_services
 from .const import (
     DOMAIN,
     CONF_MQTT_ENABLED,
@@ -22,9 +21,6 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     hass.data.setdefault(DOMAIN, {})
-    
-    await async_setup_services(hass)
-    
     return True
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -174,11 +170,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         for key in list(hass.data[DOMAIN].keys()):
             if key.startswith(f"{entry.entry_id}_"):
                 hass.data[DOMAIN].pop(key, None)
-                
-        entries = hass.config_entries.async_entries(DOMAIN)
-        if len(entries) <= 1:
-            await async_unload_services(hass)
-                
+
     return unload_ok
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
