@@ -451,7 +451,7 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         await self.async_request_refresh()
 
         if self._has_tomorrow:
-            _LOGGER.info("✓ Found tomorrow prices for %s at %s!",
+            _LOGGER.info("Found tomorrow prices for %s at %s",
                         self.price_type, now.strftime("%H:%M"))
 
         self.schedule_afternoon_update()
