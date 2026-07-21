@@ -41,16 +41,16 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         _LOGGER.debug("Starting energy cost and usage data fetch")
 
         try:
-            now = dt_util.utcnow()
+            now = dt_util.now()
 
             today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
             yesterday_start = today_start - timedelta(days=1)
             day_after_tomorrow = today_start + timedelta(days=2)
 
-            year_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+            year_start = today_start.replace(month=1, day=1)
             next_year_start = year_start.replace(year=now.year + 1)
 
-            format_time = lambda dt: dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            format_time = lambda dt: dt_util.as_utc(dt).strftime("%Y-%m-%dT%H:%M:%SZ")
 
             data = {}
 
