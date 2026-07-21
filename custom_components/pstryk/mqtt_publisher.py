@@ -124,14 +124,17 @@ class PstrykMqttPublisher:
             
             hours_by_date = {}
             for fp in formatted_prices:
-                date_part = dt_util.as_local(dt_util.parse_datetime(fp["start"])).date().isoformat()
+                date_part = dt_util.as_local(dt_util.parse_datetime(fp["start"])).date()
                 if date_part not in hours_by_date:
                     hours_by_date[date_part] = 0
                 hours_by_date[date_part] += 1
-                
+
             for date, hours in hours_by_date.items():
-                if hours != 24:
-                    _LOGGER.warning(f"Incomplete day {date}: only {hours} hours instead of 24")
+                day_start = dt_util.start_of_local_day(date)
+                next_day_start = dt_util.start_of_local_day(date + timedelta(days=1))
+                expected_hours = int((next_day_start - day_start).total_seconds() // 3600)
+                if hours != expected_hours:
+                    _LOGGER.warning(f"Incomplete day {date}: only {hours} hours instead of {expected_hours}")
         else:
             _LOGGER.warning("No prices formatted for MQTT")
                     
