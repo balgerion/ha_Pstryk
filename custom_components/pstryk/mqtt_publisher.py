@@ -124,7 +124,7 @@ class PstrykMqttPublisher:
             
             hours_by_date = {}
             for fp in formatted_prices:
-                date_part = fp["start"][:10]
+                date_part = dt_util.as_local(dt_util.parse_datetime(fp["start"])).date().isoformat()
                 if date_part not in hours_by_date:
                     hours_by_date[date_part] = 0
                 hours_by_date[date_part] += 1
