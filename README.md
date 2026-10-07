@@ -89,6 +89,23 @@ Integracja korzysta  z nowego endpointu `unified-metrics`
 
 Po włączeniu opcji **"Włącz sensory JSON z cenami"** w ustawieniach integracji pojawiają się sensory `sensor.pstryk_json_buy` i `sensor.pstryk_json_sell` z atrybutami `prices_today`, `prices_tomorrow` i `prices` (48h) w ustandaryzowanym formacie `{time, price}` — zgodnym z TGE/Nordpool i kompatybilnym z [EV Smart Charging](https://github.com/jonasbkarlsson/ev_smart_charging) czy [cheapest-energy-hours](https://github.com/TheFes/cheapest-energy-hours/).
 
+Każdy wpis ma też składniki ceny z API dla danej godziny (zł/kWh, zaokrąglone do 7 miejsc po przecinku), a wpisy `json_buy` także znaczniki Pstryka:
+
+| Pole | `json_buy` | `json_sell` |
+|---|---|---|
+| `tge_price` — cena energii | ✓ | ✓ |
+| `dist_price` — opłata dystrybucyjna zmienna | ✓ | |
+| `service_price` — opłata serwisowa | ✓ | |
+| `vat_component` — VAT | ✓ | |
+| `excise_component` — akcyza | ✓ | |
+| `is_cheap`, `is_expensive` — tania / droga godzina wg Pstryka | ✓ | |
+
+- Kupno: `tge_price + dist_price + service_price + vat_component + excise_component` to pełna cena brutto; `price` to ta sama cena zaokrąglona do 2 miejsc po przecinku.
+- Sprzedaż: przy dodatnich cenach `price` to `tge_price × 1,23` (sprawdzone na danych z API). Godziny z ceną ujemną nie były jeszcze sprawdzane, więc tam tego wzoru nie należy zakładać.
+- `is_cheap` / `is_expensive` są przepisane z API bez zmian. Pstryk podaje je dla ceny zakupu, dlatego nie ma ich we wpisach `json_sell`. Sposób ich wyznaczania nie jest znany.
+- Godziny jeszcze nieopublikowane: w `json_buy` ich nie ma, a w `json_sell` są ukryte, dopóki Pstryk nie poda cen. Składniki mają wartość `null`, gdy brakuje `tge_price` (API podaje wtedy np. `dist_price: 0`, co nie oznacza darmowej dystrybucji).
+- Jeśli po aktualizacji integracji pierwsze pobranie cen z API się nie uda, wpisy wczytane ze starej pamięci podręcznej mają składniki `null` aż do następnego udanego pobrania.
+
 Przykładowy wykres cen 48h ([apexcharts-card](https://github.com/RomRider/apexcharts-card)):
 
 ```yaml

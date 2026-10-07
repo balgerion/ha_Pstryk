@@ -15,6 +15,7 @@ from .const import (
     DEFAULT_RETRY_DELAY
 )
 from .api_client import PstrykAPIClient
+from .price_components import extract_components
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -223,6 +224,7 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
                 prices.append({
                     "start": local_start,
                     "price": val,
+                    **extract_components(pricing, self.price_type),
                     "is_cheap": pricing.get("is_cheap", False),
                     "is_expensive": pricing.get("is_expensive", False),
                 })
