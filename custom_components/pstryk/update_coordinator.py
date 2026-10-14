@@ -4,6 +4,7 @@ import os
 from datetime import timedelta
 import asyncio
 from typing import Any
+from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.util import dt as dt_util
@@ -14,7 +15,9 @@ from .const import (
     DEFAULT_RETRY_ATTEMPTS,
     DEFAULT_RETRY_DELAY
 )
-from .api_client import PstrykAPIClient
+from .api_client import PstrykAPIClient, BudgetExhausted, ClientClosed
+from .price_policy import today_published, tomorrow_fetch_due
+from .price_components import extract_components
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,8 +62,8 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         self.mqtt_48h_mode = mqtt_48h_mode
         self._unsub_hourly = None
         self._unsub_midnight = None
-        self._unsub_afternoon = None
         self._had_tomorrow_prices = False
+        self._unsub_budget_retry = None
 
         integration_path = os.path.dirname(os.path.abspath(__file__))
         self._cache_file = os.path.join(integration_path, f"cache_{price_type}.json")
@@ -121,6 +124,19 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
 
         await asyncio.to_thread(_write)
 
+    async def _load_own_cache(self) -> dict[str, Any] | None:
+        """The cache, if this config entry wrote it.
+
+        The files are named by price type only and outlive their entry; an
+        entry added later may belong to another meter with another tariff. A
+        cache without an owner (older versions) is not used either.
+        """
+        cached = await self._load_cache()
+        if cached and self.entry_id and cached.get("owner") != self.entry_id:
+            _LOGGER.info("Cache for %s was written by another entry; not using it", self.price_type)
+            return None
+        return cached
+
     def _check_has_valid_tomorrow(self, data: dict) -> bool:
         now = dt_util.now()
         tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -177,6 +193,82 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         self._had_tomorrow_prices = has_valid_tomorrow_prices
 
     async def _async_update_data(self):
+        try:
+            return await self._fetch_prices(self.retry_attempts)
+        except BudgetExhausted as err:
+            # Prices come first: keep what we have and fetch as soon as a slot frees.
+            self._arm_budget_retry(err.free_at)
+            if self.today_usable(self.data):
+                _LOGGER.info("%s prices: %s; keeping current data", self.price_type, err)
+                return self._for_today(self.data)
+            raise
+
+    def today_usable(self, data) -> bool:
+        """Whether `data` holds today's published prices, current hour included."""
+        if not data:
+            return False
+        now = dt_util.now()
+        today = now.strftime("%Y-%m-%d")
+        today_entries = [p for p in data.get("prices", []) if p.get("start", "").startswith(today)]
+        if not today_published(today_entries, now):
+            return False
+        # tge_price tells publication exactly; only older caches without it need the heuristic.
+        return any("tge_price" in p for p in today_entries) or not is_likely_placeholder_data(today_entries)
+
+    def _for_today(self, data):
+        """`data` with prices_today rebuilt for the current local date (it may be from yesterday)."""
+        today = dt_util.now().strftime("%Y-%m-%d")
+        return {**data, "prices_today": [p for p in data.get("prices", []) if p.get("start", "").startswith(today)]}
+
+    async def async_load_startup_cache(self) -> bool:
+        """Cache first. Use the cache if it holds today's published prices.
+
+        Returns True when no API request is needed; False when start-up should
+        fetch (no usable cache, or tomorrow's prices are due and missing).
+        Unusable cached rows are not exposed: data stays None until a fetch.
+        """
+        cached = await self._load_own_cache()
+        if not self.today_usable(cached):
+            return False
+        self.data = {**self._for_today(cached), "is_cached": True}
+        self._has_tomorrow = self._check_has_valid_tomorrow(self.data)
+        self.last_update_success = True
+        return not tomorrow_fetch_due(self._has_tomorrow, dt_util.now())
+
+    async def async_startup(self) -> None:
+        """Start-up: cache first, then as few API requests as the cache allows.
+
+        Today's prices cached and nothing due: no request. Today's cached and
+        only tomorrow's due: one attempt, and the cached prices stay in use
+        whatever it returns (the tomorrow checks carry on from there). No
+        usable cache: a fetch with the configured retries; its failure is raised.
+        """
+        if await self.async_load_startup_cache():
+            return
+        if self.data is not None:
+            await self.async_fetch_once()
+            return
+        self.data = await self._async_update_data()
+        self.last_update_success = True
+
+    @callback
+    def _arm_budget_retry(self, free_at):
+        if self._unsub_budget_retry:
+            self._unsub_budget_retry()
+            self._unsub_budget_retry = None
+        if self.api_client.closed:
+            return
+        retry_at = (free_at or dt_util.utcnow() + timedelta(minutes=5)) + timedelta(seconds=5)
+        _LOGGER.info("Retrying %s price fetch at %s", self.price_type,
+                     dt_util.as_local(retry_at).strftime("%H:%M:%S"))
+
+        async def _retry(_):
+            self._unsub_budget_retry = None
+            await self.async_request_refresh()
+
+        self._unsub_budget_retry = async_track_point_in_time(self.hass, _retry, retry_at)
+
+    async def _fetch_prices(self, max_retries):
         _LOGGER.debug("Starting %s price update (48h mode: %s)", self.price_type, self.mqtt_48h_mode)
 
         today_local = dt_util.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -196,7 +288,7 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             data = await self.api_client.fetch(
                 url,
-                max_retries=self.retry_attempts,
+                max_retries=max_retries,
                 base_delay=self.retry_delay
             )
 
@@ -223,6 +315,7 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
                 prices.append({
                     "start": local_start,
                     "price": val,
+                    **extract_components(pricing, self.price_type),
                     "is_cheap": pricing.get("is_cheap", False),
                     "is_expensive": pricing.get("is_expensive", False),
                 })
@@ -237,6 +330,9 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
                 "prices_today": prices_today,
                 "prices": prices,
                 "is_cached": False,
+                "owner": self.entry_id,
+                # When these prices were fetched; kept in the cache across restarts.
+                "last_updated": dt_util.now().isoformat(),
             }
 
             self._has_tomorrow = self._check_has_valid_tomorrow(new_data)
@@ -249,6 +345,9 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
 
             return new_data
 
+        except (BudgetExhausted, ClientClosed):
+            raise
+
         except UpdateFailed as err:
             _LOGGER.error("Failed to fetch %s data from API: %s", self.price_type, err)
             raise
@@ -256,6 +355,21 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
         except Exception as err:
             _LOGGER.exception("Unexpected error fetching %s data: %s", self.price_type, err)
             raise UpdateFailed(f"Error: {err}") from err
+
+    async def async_fetch_once(self) -> str:
+        """One API attempt without retries: "ok", "budget", "stopped" or "failed". On failure the current data stays."""
+        try:
+            data = await self._fetch_prices(max_retries=1)
+        except ClientClosed:
+            return "stopped"
+        except BudgetExhausted as err:
+            _LOGGER.info("One-shot %s price fetch not sent: %s", self.price_type, err)
+            return "budget"
+        except Exception as err:
+            _LOGGER.warning("One-shot %s price fetch failed, keeping current data: %s", self.price_type, err)
+            return "failed"
+        self.async_set_updated_data(data)
+        return "ok"
 
     def schedule_hourly_update(self):
         if self._unsub_hourly:
@@ -289,7 +403,7 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
 
         _LOGGER.debug("Hourly update for %s - loading from cache", self.price_type)
 
-        cached_data = self.data or await self._load_cache()
+        cached_data = self.data or await self._load_own_cache()
 
         if cached_data:
             last_updated = cached_data.get("last_updated", "")
@@ -298,7 +412,8 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
                     cache_date = last_updated.split("T")[0]
                     today_date = dt_util.now().strftime("%Y-%m-%d")
 
-                    if cache_date != today_date:
+                    # A fetch from yesterday afternoon already holds today's prices.
+                    if cache_date != today_date and not self.today_usable(cached_data):
                         _LOGGER.error("Cache for %s is from %s (today is %s) - OLD DATA! Marking as invalid.",
                                      self.price_type, cache_date, today_date)
 
@@ -329,9 +444,9 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
                     _LOGGER.debug("Could not parse cache date: %s", err)
 
             cached_data["is_cached"] = True
-            self.data = cached_data
+            self.data = self._for_today(cached_data)
             self.last_update_success = True
-            self._has_tomorrow = cached_data.get("has_tomorrow", False)
+            self._has_tomorrow = self._check_has_valid_tomorrow(self.data)
             self.async_update_listeners()
             _LOGGER.debug("Loaded %s data from cache (has_tomorrow=%s)",
                          self.price_type, self._has_tomorrow)
@@ -390,68 +505,3 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.warning("Sensors for %s are now UNAVAILABLE due to midnight fetch failure", self.price_type)
 
         self.schedule_midnight_update()
-
-    def schedule_afternoon_update(self):
-        if self._unsub_afternoon:
-            self._unsub_afternoon()
-            self._unsub_afternoon = None
-
-        if not self.mqtt_48h_mode:
-            _LOGGER.debug("Afternoon updates not scheduled for %s - 48h mode is disabled", self.price_type)
-            return
-
-        now = dt_util.now()
-
-        if now.hour < 14:
-            next_check = now.replace(hour=14, minute=0, second=0, microsecond=0)
-        elif now.hour == 14:
-            current_minutes = now.minute
-            if current_minutes < 15:
-                next_minutes = 15
-            elif current_minutes < 30:
-                next_minutes = 30
-            elif current_minutes < 45:
-                next_minutes = 45
-            else:
-                next_check = now.replace(hour=15, minute=0, second=0, microsecond=0)
-                next_minutes = None
-
-            if next_minutes is not None:
-                next_check = now.replace(minute=next_minutes, second=0, microsecond=0)
-        else:
-            next_check = (now + timedelta(days=1)).replace(hour=14, minute=0, second=0, microsecond=0)
-
-        if next_check <= now:
-            next_check = next_check + timedelta(minutes=15)
-
-        _LOGGER.info("Scheduling afternoon update check for %s at %s (48h mode, checking every 15min between 14:00-15:00)",
-                     self.price_type, next_check.strftime("%Y-%m-%d %H:%M:%S"))
-
-        self._unsub_afternoon = async_track_point_in_time(
-            self.hass, self._handle_afternoon_update, dt_util.as_utc(next_check)
-        )
-
-    async def _handle_afternoon_update(self, _):
-        now = dt_util.now()
-
-        if not self.mqtt_48h_mode:
-            _LOGGER.debug("Skipping afternoon update for %s (48h mode disabled)",
-                         self.price_type)
-            self.schedule_afternoon_update()
-            return
-
-        if self._has_tomorrow:
-            _LOGGER.debug("Already have tomorrow for %s, skipping afternoon fetch",
-                         self.price_type)
-            self.schedule_afternoon_update()
-            return
-
-        _LOGGER.info("Afternoon check for %s at %s - looking for tomorrow prices",
-                    self.price_type, now.strftime("%H:%M"))
-        await self.async_request_refresh()
-
-        if self._has_tomorrow:
-            _LOGGER.info("Found tomorrow prices for %s at %s",
-                        self.price_type, now.strftime("%H:%M"))
-
-        self.schedule_afternoon_update()

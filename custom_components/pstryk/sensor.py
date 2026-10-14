@@ -10,6 +10,7 @@ from homeassistant.util import dt as dt_util
 from .update_coordinator import PstrykDataUpdateCoordinator, is_likely_placeholder_data
 from .energy_cost_coordinator import PstrykCostDataUpdateCoordinator
 from .api_client import PstrykAPIClient
+from .tomorrow_poll import PstrykTomorrowPoller
 from .const import (
     DOMAIN,
     CONF_MQTT_48H_MODE,
@@ -20,6 +21,7 @@ from .const import (
     DEFAULT_RETRY_DELAY
 )
 from homeassistant.loader import async_get_integration
+from .price_components import entry_keys
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,6 +63,7 @@ async def async_setup_entry(
     api_client_key = f"{entry.entry_id}_api_client"
     if api_client_key not in hass.data[DOMAIN]:
         api_client = PstrykAPIClient(hass, api_key)
+        await api_client.async_load_budget()
         hass.data[DOMAIN][api_client_key] = api_client
     else:
         api_client = hass.data[DOMAIN][api_client_key]
@@ -85,19 +88,22 @@ async def async_setup_entry(
         hass,
         api_client,
         retry_attempts,
-        retry_delay
+        retry_delay,
+        entry.entry_id
     )
     cost_coordinator.last_update_success = False
+    await cost_coordinator.async_restore()
     coordinators.append((cost_coordinator, "cost", cost_key))
 
     _LOGGER.info("Starting quick initialization - loading price coordinators only")
 
     async def safe_initial_fetch(coord, coord_type):
+        # Cache first: a restart spends no API request while the cache holds
+        # today's published prices, and one attempt if only tomorrow's are due.
         try:
-            data = await coord._async_update_data()
-            coord.data = data
-            coord.last_update_success = True
-            _LOGGER.debug("Successfully initialized %s coordinator", coord_type)
+            await coord.async_startup()
+            _LOGGER.debug("Successfully initialized %s coordinator (cached: %s, tomorrow: %s)",
+                          coord_type, coord.data.get("is_cached", False), coord._has_tomorrow)
             return True
         except Exception as err:
             _LOGGER.error("Failed initial fetch for %s coordinator: %s", coord_type, err)
@@ -126,10 +132,9 @@ async def async_setup_entry(
 
         if coordinator_type in ("buy", "sell"):
             coordinator.schedule_hourly_update()
+            # Tomorrow's prices: PstrykTomorrowPoller below replaces the
+            # 14:00-15:00 afternoon checks, in every mode.
             coordinator.schedule_midnight_update()
-
-            if mqtt_48h_mode:
-                coordinator.schedule_afternoon_update()
 
             top = buy_top if coordinator_type == "buy" else sell_top
             worst = buy_worst if coordinator_type == "buy" else sell_worst
@@ -140,12 +145,19 @@ async def async_setup_entry(
 
             if coordinator_type == "buy":
                 buy_coord = coordinator
+                entities.append(PstrykPricesFetchedSensor(coordinator, entry.entry_id))
             elif coordinator_type == "sell":
                 sell_coord = coordinator
 
         elif coordinator_type == "cost":
+            # No start-up fetch: cost runs at :50 on budget the prices leave free.
             coordinator.schedule_hourly_update()
-            coordinator.schedule_midnight_update()
+
+    cost_coordinator.price_coordinators = [c for c in (buy_coord, sell_coord) if c]
+
+    poller = PstrykTomorrowPoller(hass, entry.entry_id)
+    hass.data[DOMAIN][f"{entry.entry_id}_tomorrow_poll"] = poller
+    poller.start()
 
     remaining_entities = []
 
@@ -169,26 +181,6 @@ async def async_setup_entry(
     _LOGGER.info("Registering %d current price sensors with data and %d additional sensors as unavailable",
                  len(entities), len(remaining_entities))
     async_add_entities(entities + remaining_entities)
-
-    async def lazy_load_cost_data():
-        _LOGGER.info("Waiting 15 seconds before loading cost coordinator data")
-        await asyncio.sleep(15)
-
-        _LOGGER.info("Loading cost coordinator data in background")
-        try:
-            data = await cost_coordinator._async_update_data()
-            cost_coordinator.data = data
-            cost_coordinator.last_update_success = True
-            cost_coordinator.async_update_listeners()
-            _LOGGER.info("Cost coordinator loaded successfully - %d sensors updated",
-                        len(remaining_entities))
-        except Exception as err:
-            _LOGGER.warning("Failed to load cost coordinator: %s. %d sensors remain unavailable.",
-                          err, len(remaining_entities))
-            cost_coordinator.last_update_success = False
-            cost_coordinator.data = None
-
-    entry.async_create_background_task(hass, lazy_load_cost_data(), f"{DOMAIN}_lazy_cost_load")
 
 
 class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
@@ -603,6 +595,8 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
 
 class PstrykJsonPriceSensor(CoordinatorEntity, SensorEntity):
     _attr_icon = "mdi:code-json"
+    # With the price components these lists are ~21 kB, above the recorder's
+    # 16 kB attribute limit; they must stay unrecorded.
     _unrecorded_attributes = frozenset({"prices_today", "prices_tomorrow", "prices"})
 
     def __init__(self, coordinator: PstrykDataUpdateCoordinator, price_type: str, entry_id: str):
@@ -635,6 +629,7 @@ class PstrykJsonPriceSensor(CoordinatorEntity, SensorEntity):
 
     def _price_entries(self):
         data = self.coordinator.data or {}
+        keys = entry_keys(self.price_type)
         entries = []
         for p in data.get("prices", []):
             if p.get("price") is None:
@@ -644,7 +639,7 @@ class PstrykJsonPriceSensor(CoordinatorEntity, SensorEntity):
                 continue
             if t.tzinfo is None:
                 t = t.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
-            entries.append({"time": t, "price": p["price"]})
+            entries.append({"time": t, "price": p["price"], **{k: p.get(k) for k in keys}})
         entries.sort(key=lambda e: e["time"])
         return entries
 
@@ -716,7 +711,10 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
                             self.price_type, self.period, self._state)
             except (ValueError, TypeError):
                 _LOGGER.warning("Could not restore state for %s", self.name)
-        
+
+        # Cost data restored at start-up is newer than the entity's own state.
+        self._update_from_cost()
+
     @property
     def name(self) -> str:
         period_name = self.period.title()
@@ -772,13 +770,19 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
         
     @callback
     def _handle_cost_update(self) -> None:
+        if self._update_from_cost():
+            self.async_write_ha_state()
+
+    def _period_data(self):
         if not self.cost_coordinator or not self.cost_coordinator.data:
-            return
-            
-        period_data = self.cost_coordinator.data.get(self.period)
+            return None
+        return self.cost_coordinator.data.get(self.period)
+
+    def _update_from_cost(self) -> bool:
+        period_data = self._period_data()
         if not period_data:
-            return
-            
+            return False
+
         if self.price_type == "buy":
             total_cost = abs(period_data.get("total_cost", 0))
             energy_bought = period_data.get("fae_usage", 0)
@@ -800,14 +804,16 @@ class PstrykAveragePriceSensor(RestoreEntity, SensorEntity):
                 self._total_revenue = total_revenue
             else:
                 self._state = None
-                
-        self.async_write_ha_state()
-        
+
+        return True
+
     @property
     def available(self) -> bool:
-        return (self.cost_coordinator is not None and 
+        # Its own period only: after midnight a restored month must not make
+        # yesterday's daily average look current.
+        return (self.cost_coordinator is not None and
                 self.cost_coordinator.last_update_success and
-                self.cost_coordinator.data is not None)
+                bool(self._period_data()))
 
 
 class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
@@ -922,3 +928,44 @@ class PstrykFinancialBalanceSensor(CoordinatorEntity, SensorEntity):
     @property
     def available(self) -> bool:
         return self.coordinator.last_update_success and self.coordinator.data is not None
+
+
+class PstrykPricesFetchedSensor(CoordinatorEntity, SensorEntity):
+    """When the prices were last fetched from the API (not when the sensors last refreshed)."""
+
+    _attr_icon = "mdi:cloud-download-outline"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(self, coordinator: PstrykDataUpdateCoordinator, entry_id: str):
+        super().__init__(coordinator)
+        self.entry_id = entry_id
+        self.entity_id = f"sensor.{DOMAIN}_prices_fetched"
+
+    @property
+    def name(self) -> str:
+        return "Pstryk Prices Fetched"
+
+    @property
+    def unique_id(self) -> str:
+        return f"{DOMAIN}_prices_fetched"
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, "pstryk_energy")},
+            "name": "Pstryk Energy",
+            "manufacturer": "Pstryk",
+            "model": "Energy Price Monitor",
+            "sw_version": get_integration_version(self.hass),
+        }
+
+    @property
+    def native_value(self):
+        # The cache records the save time of each successful fetch, and it is
+        # kept across restarts, so this is the time the data in use was fetched.
+        fetched = (self.coordinator.data or {}).get("last_updated")
+        return dt_util.parse_datetime(fetched) if fetched else None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"tomorrow_available": self.coordinator._has_tomorrow}

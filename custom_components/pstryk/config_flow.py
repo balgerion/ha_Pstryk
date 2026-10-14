@@ -1,15 +1,8 @@
 from homeassistant import config_entries
 import voluptuous as vol
-import asyncio
-from datetime import timedelta
-from homeassistant.util import dt as dt_util
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .const import (
     DOMAIN,
-    API_URL,
-    API_TIMEOUT,
-    PRICING_ENDPOINT,
     DEFAULT_MQTT_TOPIC_BUY,
     DEFAULT_MQTT_TOPIC_SELL,
     CONF_MQTT_ENABLED,
@@ -27,6 +20,9 @@ from .const import (
     MAX_RETRY_DELAY
 )
 
+from .api_client import async_validate_api_key
+
+
 class MQTTNotConfiguredError(HomeAssistantError):
     pass
 
@@ -41,11 +37,13 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input is not None:
             api_key = user_input["api_key"]
-            valid = await self._validate_api_key(api_key)
-            
+            valid = await async_validate_api_key(self.hass, api_key)
+
             if valid:
                 self._data["api_key"] = api_key
                 return await self.async_step_price_settings()
+            elif valid is None:
+                errors["base"] = "api_budget_full"
             else:
                 errors["api_key"] = "invalid_api_key"
 
@@ -138,25 +136,6 @@ class PstrykConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ),
             })
         )
-    
-    async def _validate_api_key(self, api_key):
-        now = dt_util.utcnow()
-        start_utc = now.strftime("%Y-%m-%dT%H:%M:%SZ")
-        end_utc = (now + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-        endpoint = PRICING_ENDPOINT.format(start=start_utc, end=end_utc)
-        url = f"{API_URL}{endpoint}"
-
-        try:
-            session = async_get_clientsession(self.hass)
-            async with asyncio.timeout(API_TIMEOUT):
-                resp = await session.get(
-                    url,
-                    headers={"Authorization": api_key, "Accept": "application/json"}
-                )
-                return resp.status == 200
-        except (Exception, asyncio.TimeoutError):
-            return False
     
     async def _check_mqtt_configuration(self):
         try:

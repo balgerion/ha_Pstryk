@@ -3,6 +3,7 @@ from datetime import timedelta
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.event import async_track_point_in_time
+from homeassistant.helpers.storage import Store
 import homeassistant.util.dt as dt_util
 from .const import (
     DOMAIN,
@@ -12,16 +13,43 @@ from .const import (
     DEFAULT_RETRY_DELAY
 )
 from .api_client import PstrykAPIClient
+from .price_policy import COST_KEEP_FREE, cost_run_allowed, next_cost_run
 
 _LOGGER = logging.getLogger(__name__)
+
+COST_DATA_STORE_VERSION = 1
+
+# A saved period is restored only within the day, month or year it was fetched in.
+PERIOD_FORMATS = {"daily": "%Y-%m-%d", "monthly": "%Y-%m", "yearly": "%Y"}
+
+
+def restorable_periods(saved, now):
+    """The saved periods still current at `now` (local), as coordinator data."""
+    restored = {}
+    for period, fmt in PERIOD_FORMATS.items():
+        entry = (saved or {}).get(period)
+        if not isinstance(entry, dict) or not entry.get("data"):
+            continue
+        fetched = dt_util.parse_datetime(entry.get("fetched") or "")
+        if fetched and dt_util.as_local(fetched).strftime(fmt) == now.strftime(fmt):
+            restored[period] = entry["data"]
+    return restored
 
 
 class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
 
-    def __init__(self, hass: HomeAssistant, api_client: PstrykAPIClient, retry_attempts=None, retry_delay=None):
+    def __init__(self, hass: HomeAssistant, api_client: PstrykAPIClient, retry_attempts=None, retry_delay=None, entry_id=None):
         self.api_client = api_client
+        self.entry_id = entry_id
         self._unsub_hourly = None
         self._unsub_midnight = None
+        # Set by sensor.py: cost waits until these have tomorrow's prices.
+        self.price_coordinators = []
+        # The last data fetched per period, kept across restarts: cost runs only
+        # at :50 on leftover budget, so the sensors would otherwise stay empty
+        # for an hour or more after every restart.
+        self._store = Store(hass, COST_DATA_STORE_VERSION, f"{DOMAIN}_cost_data")
+        self._saved = {}
 
         if retry_attempts is None:
             retry_attempts = DEFAULT_RETRY_ATTEMPTS
@@ -66,7 +94,8 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
                 daily_data = await self.api_client.fetch(
                     daily_url,
                     max_retries=self.retry_attempts,
-                    base_delay=self.retry_delay
+                    base_delay=self.retry_delay,
+                    keep_free=COST_KEEP_FREE
                 )
 
                 if daily_data:
@@ -86,7 +115,8 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
                 yearly_data = await self.api_client.fetch(
                     yearly_url,
                     max_retries=self.retry_attempts,
-                    base_delay=self.retry_delay
+                    base_delay=self.retry_delay,
+                    keep_free=COST_KEEP_FREE
                 )
 
                 if yearly_data:
@@ -283,46 +313,44 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
             "rae_usage": rae_usage
         }
 
-    def schedule_midnight_update(self):
-        if hasattr(self, '_unsub_midnight'):
-            if self._unsub_midnight:
-                self._unsub_midnight()
-                self._unsub_midnight = None
-        else:
-            self._unsub_midnight = None
-
-        now = dt_util.now()
-        next_mid = (now + timedelta(days=1)).replace(hour=0, minute=1, second=0, microsecond=0)
-
-        _LOGGER.debug("Scheduling next midnight cost update at %s",
-                     next_mid.strftime("%Y-%m-%d %H:%M:%S"))
-
-        self._unsub_midnight = async_track_point_in_time(
-            self.hass, self._handle_midnight_update, dt_util.as_utc(next_mid)
-        )
-
-    async def _handle_midnight_update(self, _):
-        _LOGGER.debug("Running scheduled midnight cost update (all resolutions)")
+    async def async_restore(self):
+        """Serve the last saved data until the next cost run. Sends no request."""
         try:
-            data = await self._async_update_data()
-            self.data = data
-            self.last_update_success = True
-            self.async_update_listeners()
+            self._saved = await self._store.async_load() or {}
         except Exception as err:
-            _LOGGER.error("Midnight cost update failed: %s - will retry next hour", err)
-            self.last_update_success = False
-        finally:
-            self.schedule_midnight_update()
+            _LOGGER.warning("Failed to load saved cost data: %s", err)
+            self._saved = {}
+        # Like the price cache: the store outlives its entry, and an entry added
+        # later may belong to another account.
+        if self._saved and self._saved.get("owner") != self.entry_id:
+            _LOGGER.info("Saved cost data was written by another entry; not using it")
+            self._saved = {}
+        restored = restorable_periods(self._saved, dt_util.now())
+        if restored:
+            self.data = restored
+            self.last_update_success = True
+            _LOGGER.debug("Restored cost data for %s", sorted(restored))
+
+    async def _async_save(self, data):
+        fetched = dt_util.utcnow().isoformat()
+        self._saved["owner"] = self.entry_id
+        for period, period_data in data.items():
+            self._saved[period] = {"fetched": fetched, "data": period_data}
+        try:
+            await self._store.async_save(self._saved)
+        except Exception as err:
+            _LOGGER.warning("Failed to save cost data: %s", err)
 
     def schedule_hourly_update(self):
         if self._unsub_hourly:
             self._unsub_hourly()
             self._unsub_hourly = None
 
-        now = dt_util.now()
-        next_run = (now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1, minutes=1))
+        # Cost is nice to have; prices come first. It runs at :50, outside the
+        # price hours, and only on budget the prices don't need.
+        next_run = next_cost_run(dt_util.now())
 
-        _LOGGER.debug("Scheduling next hourly cost update at %s",
+        _LOGGER.debug("Scheduling next cost update at %s",
                      next_run.strftime("%Y-%m-%d %H:%M:%S"))
 
         self._unsub_hourly = async_track_point_in_time(
@@ -330,12 +358,24 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     async def _handle_hourly_update(self, now):
-        _LOGGER.debug("Triggering hourly cost update")
+        local_now = dt_util.now()
+        tomorrow = all(c._has_tomorrow for c in self.price_coordinators)
+        if not cost_run_allowed(local_now, tomorrow):
+            _LOGGER.debug("Skipping cost update at %s: prices first", local_now.strftime("%H:%M"))
+            self.schedule_hourly_update()
+            return
+        if not self.api_client.budget_room_soon(keep_free=COST_KEEP_FREE):
+            _LOGGER.debug("Skipping cost update at %s: API budget kept for prices", local_now.strftime("%H:%M"))
+            self.schedule_hourly_update()
+            return
+
+        _LOGGER.debug("Triggering cost update")
         try:
             data = await self._async_update_data()
             self.data = {**(self.data or {}), **data}
             self.last_update_success = True
             self.async_update_listeners()
+            await self._async_save(data)
         except Exception as err:
             _LOGGER.error("Hourly cost update failed: %s - will retry next hour", err)
             self.last_update_success = False

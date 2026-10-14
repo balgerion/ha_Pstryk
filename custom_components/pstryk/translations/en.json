@@ -60,7 +60,8 @@
     },
     "error": {
       "invalid_api_key": "Invalid API key",
-      "mqtt_not_configured": "MQTT integration not configured or not working. Please configure the MQTT integration in Home Assistant before enabling EVCC MQTT Bridge."
+      "mqtt_not_configured": "MQTT integration not configured or not working. Please configure the MQTT integration in Home Assistant before enabling EVCC MQTT Bridge.",
+      "api_budget_full": "Pstryk allows 3 API requests per hour and this hour's are used. Try again in a few minutes."
     }
   },
   "options": {

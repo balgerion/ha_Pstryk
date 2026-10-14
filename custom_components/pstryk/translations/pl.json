@@ -60,7 +60,8 @@
     },
     "error": {
       "invalid_api_key": "Nieprawidłowy klucz API",
-      "mqtt_not_configured": "Integracja MQTT nie jest skonfigurowana lub nie działa. Skonfiguruj integrację MQTT w Home Assistant przed włączeniem mostka MQTT dla EVCC."
+      "mqtt_not_configured": "Integracja MQTT nie jest skonfigurowana lub nie działa. Skonfiguruj integrację MQTT w Home Assistant przed włączeniem mostka MQTT dla EVCC.",
+      "api_budget_full": "Pstryk pozwala na 3 zapytania do API na godzinę i w tej godzinie zostały wykorzystane. Spróbuj ponownie za kilka minut."
     }
   },
   "options": {

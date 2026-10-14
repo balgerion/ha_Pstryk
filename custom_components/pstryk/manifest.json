@@ -8,7 +8,7 @@
   "config_flow": true,
   "documentation": "https://github.com/balgerion/ha_Pstryk",
   "issue_tracker": "https://github.com/balgerion/ha_Pstryk/issues",
-  "platforms": ["sensor"],
+  "platforms": ["sensor", "button"],
   "logo": "logo.png",
   "diagnostics": true
 }

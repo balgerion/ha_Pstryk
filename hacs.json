@@ -1,6 +1,6 @@
 {
   "name": "ha_Pstryk",
-  "domains": ["sensor"],
+  "domains": ["sensor", "button"],
   "content_in_root": false,
   "country": "PL",
   "render_readme": true,
