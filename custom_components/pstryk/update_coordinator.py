@@ -49,6 +49,68 @@ def is_likely_placeholder_data(prices_for_day):
     return False
 
 
+def entry_start(entry):
+    """When a price entry starts, as a UTC datetime; None without a start.
+
+    Entries carry their UTC offset; a naive one, from a cache written by an
+    older version, is local time. UTC, because two datetimes in one zone
+    compare by wall clock, which makes 02:00 CEST and 02:00 CET equal.
+    """
+    parsed = dt_util.parse_datetime(entry.get("start") or "")
+    return dt_util.as_utc(dt_util.as_local(parsed)) if parsed else None
+
+
+def has_current_hour(data):
+    """Whether `data` holds a price for the hour now, matched by instant."""
+    hour = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
+    return any(
+        p.get("price") is not None and entry_start(p) == hour
+        for p in (data or {}).get("prices", [])
+    )
+
+
+def with_offsets(data):
+    """`data` with every naive `start` (a cache written by an older version) given its offset.
+
+    A naive local time is ambiguous in the repeated hour of a clock change.
+    The API lists frames in order and the cache keeps that order, so of two
+    equal naive starts the second is the second pass (fold=1): 02:00+01:00.
+    One without its twin (the other hour's price was null and never cached)
+    has lost which pass it was and is dropped; the rest of the cache stands,
+    and the hourly update fetches when the current hour is missing.
+    """
+    if not data:
+        return data
+    out = dict(data)
+    for key in ("prices", "prices_today"):
+        entries = data.get(key)
+        if not entries:
+            continue
+        naive = {}
+        for entry in entries:
+            parsed = dt_util.parse_datetime(entry.get("start") or "")
+            if parsed is not None and parsed.tzinfo is None:
+                naive[entry["start"]] = naive.get(entry["start"], 0) + 1
+        seen = set()
+        rewritten = []
+        for entry in entries:
+            start = entry.get("start")
+            if start not in naive:
+                rewritten.append(entry)
+                continue
+            parsed = dt_util.parse_datetime(start)
+            first = dt_util.as_local(parsed.replace(fold=0))
+            second = dt_util.as_local(parsed.replace(fold=1))
+            if first.utcoffset() != second.utcoffset() and naive[start] != 2:
+                _LOGGER.info("Cache holds the repeated hour %s without its twin; which pass it was is lost, so the row is dropped",
+                             start)
+                continue
+            rewritten.append({**entry, "start": (second if start in seen else first).isoformat()})
+            seen.add(start)
+        out[key] = rewritten
+    return out
+
+
 class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
 
     def __init__(self, hass, api_client: PstrykAPIClient, price_type, mqtt_48h_mode=False, retry_attempts=None, retry_delay=None, entry_id=None):
@@ -102,7 +164,7 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
                                       data.get("failed_at", "unknown"))
                         return None
 
-                    return data
+                    return with_offsets(data)
             except Exception as err:
                 _LOGGER.warning("Failed to read cache for %s: %s", self.price_type, err)
                 return None
@@ -218,7 +280,11 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
                     _LOGGER.warning("Invalid datetime format in frames for %s", self.price_type)
                     continue
 
-                local_start = dt_util.as_local(start).strftime("%Y-%m-%dT%H:%M:%S")
+                # Local time with its offset: on the night the clocks go back
+                # the repeated hour is 02:00+02:00 and then 02:00+01:00. Without
+                # the offset both read as the first, and the second hour had
+                # no price of its own.
+                local_start = dt_util.as_local(start).isoformat()
                 pricing = f.get("metrics", {}).get("pricing", {})
                 prices.append({
                     "start": local_start,
@@ -262,12 +328,15 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
             self._unsub_hourly()
             self._unsub_hourly = None
 
-        now = dt_util.now()
+        # In UTC: local wall-clock arithmetic on the night the clocks go back
+        # books the tick after the repeated hour and skips it (Poland's offsets
+        # are whole hours). From kriskomp/ha_Pstryk 4b5739d (2.2.4).
+        now = dt_util.utcnow()
         next_run = (now.replace(minute=0, second=0, microsecond=0)
                     + timedelta(hours=1, seconds=5))
 
         _LOGGER.debug("Scheduling next hourly update for %s at %s",
-                     self.price_type, next_run.strftime("%Y-%m-%d %H:%M:%S"))
+                     self.price_type, dt_util.as_local(next_run).strftime("%Y-%m-%d %H:%M:%S"))
 
         self._unsub_hourly = async_track_point_in_time(
             self.hass, self._handle_hourly_update, dt_util.as_utc(next_run)
@@ -298,22 +367,28 @@ class PstrykDataUpdateCoordinator(DataUpdateCoordinator):
                     cache_date = last_updated.split("T")[0]
                     today_date = dt_util.now().strftime("%Y-%m-%d")
 
-                    if cache_date != today_date:
-                        _LOGGER.error("Cache for %s is from %s (today is %s) - OLD DATA! Marking as invalid.",
-                                     self.price_type, cache_date, today_date)
-
-                        try:
-                            invalid_cache = {
-                                "invalid": True,
-                                "reason": "old_data_detected",
-                                "failed_at": dt_util.now().isoformat(),
-                                "cache_date": cache_date,
-                                "expected_date": today_date
-                            }
-                            await self._save_cache(invalid_cache)
-                            _LOGGER.warning("Marked old cache as INVALID for %s", self.price_type)
-                        except Exception as cache_err:
-                            _LOGGER.error("Failed to mark cache as invalid: %s", cache_err)
+                    # A cache from today can still lack the current hour (a
+                    # repeated hour dropped from an older version's cache):
+                    # then fetch too; only an old cache is marked invalid.
+                    stale = cache_date != today_date
+                    if stale or not has_current_hour(cached_data):
+                        if stale:
+                            _LOGGER.error("Cache for %s is from %s (today is %s) - OLD DATA! Marking as invalid.",
+                                         self.price_type, cache_date, today_date)
+                            try:
+                                invalid_cache = {
+                                    "invalid": True,
+                                    "reason": "old_data_detected",
+                                    "failed_at": dt_util.now().isoformat(),
+                                    "cache_date": cache_date,
+                                    "expected_date": today_date
+                                }
+                                await self._save_cache(invalid_cache)
+                                _LOGGER.warning("Marked old cache as INVALID for %s", self.price_type)
+                            except Exception as cache_err:
+                                _LOGGER.error("Failed to mark cache as invalid: %s", cache_err)
+                        else:
+                            _LOGGER.info("Cache for %s has no price for the current hour; fetching", self.price_type)
 
                         try:
                             await self.async_request_refresh()

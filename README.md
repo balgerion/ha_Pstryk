@@ -25,6 +25,7 @@ Integracja korzysta  z nowego endpointu `unified-metrics`
 - Średnia cena z pozostałej ilości godzin do końca doby  
 - Średnia cena wschód/zachód  
 - Automatyczna konwersja czasu UTC → lokalny  
+- Poprawna obsługa zmiany czasu: powtórzona godzina 02:00 ma dwa wpisy, każdy `start` niesie swoje przesunięcie  
 - Dane są aktualizowane minutę po pełnej godzinie  
 - Konfiguracja z poziomu integracji  
 - Walidacja klucza API / Cache danych / Zabezpieczenie przed timeoutem API  
@@ -126,6 +127,8 @@ series:
 
 Nagłówek karty pokazuje aktualną cenę (stan sensora, odświeżany co godzinę), a pionowa linia "teraz" zaznacza bieżącą godzinę na osi 48h.
 
+Pole `start` w atrybutach `All prices`, `Best prices` i `Worst prices` niesie przesunięcie strefy, np. `2026-10-25T02:00:00+01:00`. W noc cofnięcia zegara godzina 02:00 ma dwa wpisy, `02:00:00+02:00` i `02:00:00+01:00`, a aktualizacja godzinna jest liczona w UTC, więc żadna godzina nie jest pomijana ani liczona podwójnie. Pamięć podręczna z poprzedniej wersji dostaje przesunięcia przy wczytaniu. Automatyzacja z wcześniejszych wersji, która porównuje `start` z `now().isoformat(timespec='seconds').split('+')[0]`, przestaje pasować: wystarczy usunąć `.split('+')[0]`, jak w przykładzie poniżej.
+
 Przykładowa Automatyzacja:
 
 Włączanie bojlera
@@ -142,7 +145,7 @@ conditions:
   - condition: template
     value_template: >
       {% set current_hour = now().replace(minute=0, second=0,
-      microsecond=0).isoformat(timespec='seconds').split('+')[0] %}
+      microsecond=0).isoformat(timespec='seconds') %}
 
       {% set best_hours = state_attr('sensor.pstryk_current_buy_price',
       'Best prices') | map(attribute='start') | list %}
@@ -152,7 +155,7 @@ actions:
   - variables:
       current_hour: >-
         {{ now().replace(minute=0, second=0,
-        microsecond=0).isoformat(timespec='seconds').split('+')[0] }}
+        microsecond=0).isoformat(timespec='seconds') }}
   - choose:
       - conditions:
           - condition: state

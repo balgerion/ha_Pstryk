@@ -8,7 +8,7 @@ from .const import (
     DEFAULT_MQTT_TOPIC_BUY,
     DEFAULT_MQTT_TOPIC_SELL
 )
-from .update_coordinator import is_likely_placeholder_data
+from .update_coordinator import entry_start, is_likely_placeholder_data
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ class PstrykMqttPublisher:
         for date_to_include in sorted(days_to_include):
             day_prices = prices_by_date.get(date_to_include, [])
             
-            day_prices.sort(key=lambda x: x["start"])
+            day_prices.sort(key=entry_start)
             
             for price_entry in day_prices:
                 try:
@@ -132,7 +132,10 @@ class PstrykMqttPublisher:
             for date, hours in hours_by_date.items():
                 day_start = dt_util.start_of_local_day(date)
                 next_day_start = dt_util.start_of_local_day(date + timedelta(days=1))
-                expected_hours = int((next_day_start - day_start).total_seconds() // 3600)
+                # Two datetimes in one zone subtract by wall clock: 24 on a 25-hour day.
+                expected_hours = int(
+                    (dt_util.as_utc(next_day_start) - dt_util.as_utc(day_start)).total_seconds() // 3600
+                )
                 if hours != expected_hours:
                     _LOGGER.warning(f"Incomplete day {date}: only {hours} hours instead of {expected_hours}")
         else:

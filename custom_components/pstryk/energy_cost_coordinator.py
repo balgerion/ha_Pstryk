@@ -319,11 +319,13 @@ class PstrykCostDataUpdateCoordinator(DataUpdateCoordinator):
             self._unsub_hourly()
             self._unsub_hourly = None
 
-        now = dt_util.now()
+        # In UTC: on the local wall clock 02:01 CEST + 1 h is 03:01 CET and the
+        # repeated hour's run is skipped.
+        now = dt_util.utcnow()
         next_run = (now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1, minutes=1))
 
         _LOGGER.debug("Scheduling next hourly cost update at %s",
-                     next_run.strftime("%Y-%m-%d %H:%M:%S"))
+                     dt_util.as_local(next_run).strftime("%Y-%m-%d %H:%M:%S"))
 
         self._unsub_hourly = async_track_point_in_time(
             self.hass, self._handle_hourly_update, dt_util.as_utc(next_run)

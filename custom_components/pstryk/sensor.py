@@ -7,7 +7,7 @@ from homeassistant.components.sensor import SensorEntity, SensorStateClass, Sens
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
-from .update_coordinator import PstrykDataUpdateCoordinator, is_likely_placeholder_data
+from .update_coordinator import PstrykDataUpdateCoordinator, entry_start, is_likely_placeholder_data
 from .energy_cost_coordinator import PstrykCostDataUpdateCoordinator
 from .api_client import PstrykAPIClient
 from .const import (
@@ -267,70 +267,25 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
     def native_unit_of_measurement(self) -> str:
         return "PLN/kWh"
     
-    def _get_next_hour_price(self) -> dict:
+    def _get_next_hour_price(self):
         if not self.coordinator.data:
             return None
-            
-        now = dt_util.as_local(dt_util.utcnow())
-        next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-        
-        debug_msg = "Looking for price for next hour: {next_hour}".format(next_hour=next_hour.strftime("%Y-%m-%d %H:%M:%S"))
-        _LOGGER.debug(debug_msg)
-        
-        is_looking_for_next_day = next_hour.day != now.day
-        
-        price_found = None
-        if self.coordinator.data.get("prices_today"):
-            for price_data in self.coordinator.data.get("prices_today", []):
-                if "start" not in price_data:
-                    continue
-                    
-                try:
-                    price_datetime = dt_util.parse_datetime(price_data["start"])
-                    if not price_datetime:
-                        continue
-                        
-                    price_datetime = dt_util.as_local(price_datetime)
-                    
-                    if price_datetime.hour == next_hour.hour and price_datetime.day == next_hour.day:
-                        price_found = price_data.get("price")
-                        _LOGGER.debug("Found price for %s in today's list: %s", next_hour.strftime("%Y-%m-%d %H:%M:%S"), price_found)
-                        return price_found
-                except Exception as e:
-                    error_msg = "Error processing date: {error}".format(error=str(e))
-                    _LOGGER.error(error_msg)
-        
-        if self.coordinator.data.get("prices"):
-            _LOGGER.debug("Looking for price in full 48h list as fallback")
-            
-            for price_data in self.coordinator.data.get("prices", []):
-                if "start" not in price_data:
-                    continue
-                    
-                try:
-                    price_datetime = dt_util.parse_datetime(price_data["start"])
-                    if not price_datetime:
-                        continue
-                        
-                    price_datetime = dt_util.as_local(price_datetime)
-                    
-                    if price_datetime.hour == next_hour.hour and price_datetime.day == next_hour.day:
-                        price_found = price_data.get("price")
-                        _LOGGER.debug("Found price for %s in full 48h list: %s", next_hour.strftime("%Y-%m-%d %H:%M:%S"), price_found)
-                        return price_found
-                except Exception as e:
-                    full_list_error_msg = "Error processing date for full list: {error}".format(error=str(e))
-                    _LOGGER.error(full_list_error_msg)
-        
-        if is_looking_for_next_day:
-            midnight_msg = "No price found for next day midnight. Data probably not loaded yet."
-            _LOGGER.info(midnight_msg)
+
+        # The next boundary in UTC: an hour added on the local wall clock skips
+        # the repeated hour when the clocks go back, and lands on the missing
+        # hour when they go forward.
+        next_start = dt_util.utcnow().replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        for price_data in self.coordinator.data.get("prices", []):
+            if entry_start(price_data) == next_start:
+                return price_data.get("price")
+
+        next_local = dt_util.as_local(next_start)
+        if next_local.hour == 0:
+            _LOGGER.info("No price found for next day midnight. Data probably not loaded yet.")
         else:
-            no_price_msg = "No price found for next hour: {next_hour}".format(next_hour=next_hour.strftime("%Y-%m-%d %H:%M:%S"))
-            _LOGGER.warning(no_price_msg)
-                
+            _LOGGER.warning("No price found for next hour: %s", next_local.strftime("%Y-%m-%d %H:%M:%S"))
         return None
-    
+
     def _get_cached_sorted_prices(self, today):
         data_hash = hash(tuple((p["start"], p["price"]) for p in today))
         
@@ -361,7 +316,8 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
         if not prices:
             return 0
             
-        sorted_prices = sorted(prices, key=lambda x: x.get("start", ""))
+        # By instant: as strings, the repeated hour's +01:00 sorts before +02:00.
+        sorted_prices = sorted(prices, key=entry_start)
         
         max_consecutive = 1
         current_consecutive = 1
@@ -534,13 +490,12 @@ class PstrykPriceSensor(CoordinatorEntity, SensorEntity):
             if valid_prices_count_full > 0:
                 avg_price_full_day = round(total_price_full / valid_prices_count_full, 2)
             
-            current_hour = now.strftime("%Y-%m-%dT%H:")
-            remaining_prices = []
-            
-            for p in today:
-                if p.get("price") is not None and p.get("start", "") >= current_hour:
-                    remaining_prices.append(p.get("price"))
-            
+            current_hour = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
+            remaining_prices = [
+                p["price"] for p in today
+                if p.get("price") is not None and entry_start(p) >= current_hour
+            ]
+
             remaining_hours_count = len(remaining_prices)
             if remaining_hours_count > 0:
                 avg_price_remaining = round(sum(remaining_prices) / remaining_hours_count, 2)
